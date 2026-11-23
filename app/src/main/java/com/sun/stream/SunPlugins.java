@@ -20,7 +20,7 @@ import java.util.concurrent.TimeUnit;
 /** Stremio JSON add-on adapter. No JS evaluation, account, browser, DRM bypass or scraping. */
 final class SunPlugins {
     private static Context app;
-    private static final int LIMIT = 6;
+    private static final int LIMIT = 18;
     static final String MAIN_BASE = "https://animesfhd.net/stremio";
     static void init(Context context) { app = context.getApplicationContext(); }
 
@@ -112,7 +112,7 @@ final class SunPlugins {
                .put("catalogs",new JSONArray());
             list.put(main);
             List<String> manifests=installed();
-            ExecutorService pool=Executors.newFixedThreadPool(Math.min(LIMIT,Math.max(1,manifests.size())));
+            ExecutorService pool=Executors.newFixedThreadPool(Math.min(6,Math.max(1,manifests.size())));
             try {
                 List<Future<JSONObject>> futures=new ArrayList<>();
                 for(int i=0;i<manifests.size();i++) {

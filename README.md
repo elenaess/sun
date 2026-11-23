@@ -32,3 +32,23 @@ player funciona, abra um arquivo MP4 seu por **Meus vídeos** ou um título do
 
 Esta atualização não garante reprodução dos títulos de provedores externos.
 Não interprete o teste do GitHub Actions como prova de acesso ao servidor.
+
+## Novidades v0.5.0 — múltiplas fontes e teste do player
+
+- Até **18** manifestos HTTPS Stremio configuráveis, consultados como catálogos independentes.
+- Busca de vídeos abertos do Wikimedia Commons e Internet Archive (somente resultados com indicação
+  de CC BY, CC BY-SA, CC0 ou domínio público e formatos MP4/WebM).
+- **Teste do player** no Perfil: amostra MP4 Big Buck Bunny da infraestrutura de
+  testes do Android/ExoPlayer. Licença da animação: CC BY 3.0.
+- Identificadores de episódios continuam vinculados ao provedor respectivo.
+- Player AndroidX Media3 nativo, com HLS, DASH, MP4, WebM conforme codecs do aparelho.
+- Nenhuma conta do Sun ou endereço especial de serviço é necessário.
+
+AVISO: Muitos catálogos de animes famosos não disponibilizam streams licenciados.
+Um resultado de catálogo NÃO garante link de vídeo. O app não faz bypass de
+DRM, região ou HTTP 403, e não inclui extensões de origem não verificada.
+As buscas Wikimedia/Archive usam metadados de licença dos contribuidores;
+confira autoria/licença na ficha antes de redistribuir vídeos.
+
+Se o teste Big Buck Bunny funcionar e outros vídeos falharem, o player está
+provavelmente operacional e o problema está nos links ou nas fontes externas.

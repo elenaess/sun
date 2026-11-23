@@ -7,7 +7,7 @@ const AnimeProvider = (() => {
   const id = text => encodeURIComponent(String(text));
   let sourcePromise;
   function clearCache(){cache.clear();sourcePromise=null;}
-  function safeIndex(num){const v=Number(num);return Number.isInteger(v)&&v>=1&&v<=6?v:null;}
+  function safeIndex(num){const v=Number(num);return Number.isInteger(v)&&v>=1&&v<=18?v:null;}
   async function json(path){
     if(cache.has(path))return cache.get(path);
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),18000);
@@ -59,13 +59,16 @@ const AnimeProvider = (() => {
   async function catalog(key,query='',skip=0){
     if(!catalogs[key])return [];
     const term=query.trim(),plugins=await sources();
-    const tasks=[primaryCatalog(key,term,skip),...plugins.map(p=>extraCatalog(p,key,term,skip))];
+    // Busca também vídeos com licença aberta, sem depender do provedor principal.
+    const tasks=[primaryCatalog(key,term,skip),...plugins.map(p=>extraCatalog(p,key,term,skip)),
+      ...((key==='films'||key==='popular')?[OpenMedia.search(term,skip),OpenArchive.search(term,skip)]:[])];
     const settled=await Promise.allSettled(tasks),rows=[];
     for(const result of settled)if(result.status==='fulfilled')rows.push(...result.value);
     if(!rows.length&&settled.every(s=>s.status==='rejected'))throw new Error('Nenhum provedor disponível');
     return [...new Map(rows.map(x=>[x.id,x])).values()];
   }
   async function detail(m){
+    if(m.provider==='open')return m;
     const index=m.provider==='plugin'?safeIndex(m.sourceIndex):null;
     if(m.provider==='plugin'&&!index)throw new Error('Plugin desconhecido');
     const route=(index?'/plugin/'+index:'')+'/meta/'+m.type+'/'+id(m.remoteId)+'.json';

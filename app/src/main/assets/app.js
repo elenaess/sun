@@ -34,6 +34,8 @@ function toast(message) {
 }
 function tracks(m) {
   if(['fhd','plugin'].includes(m.provider))return m.providerEpisodes||[];
+  if(['open','archive'].includes(m.provider) && Array.isArray(m.streams) && m.streams.some(s=>external(s.url)))
+    return [{id:'open-'+String(m.id),name:'Vídeo completo',streams:m.streams}];
   const original = films.find(f=>f.id===m.id);
   const eps = original ? [{id:'main',name:original.episode,streams:original.streams,subtitle:original.subtitle}] : [];
   const extras = Array.isArray(prefs.sources[m.id]) ? prefs.sources[m.id] : [];
@@ -128,11 +130,14 @@ function toolsPage(){
     <button class="row" data-action="link">${icon('plus')} Abrir link de vídeo</button>${editing?sourceForm(false):''}`;
 }
 function profile(){
-  return `<h1>Perfil</h1><div class="identity"><img src="./cinema/morevna.jpg" alt=""><div><strong>Meu perfil</strong><small>Sun 0.4.2</small></div></div>
+  return `<h1>Perfil</h1><div class="identity"><img src="./cinema/morevna.jpg" alt=""><div><strong>Meu perfil</strong><small>Sun 0.5.0</small></div></div>
     <button class="row" data-action="theme">${icon('moon')} Tema ${prefs.theme==='light'?'claro':'escuro'}</button>
     <button class="row" data-action="export">${icon('download')} Exportar biblioteca</button>
     <button class="row" data-action="import">${icon('upload')} Importar biblioteca</button>
-    <h2>Plugins de vídeo</h2><p class="desc">Fontes compatíveis com Stremio. Sem conta no Sun; a disponibilidade depende do plugin. Adicione apenas fontes autorizadas.</p>
+    <button class="row" data-action="selftest">${icon('play')} Testar player com Big Buck Bunny (MP4 livre)</button>
+    <p class="desc">O Sun também pesquisa vídeos com licença aberta no Wikimedia Commons.
+    Internet Archive e Wikimedia Commons incluem materiais com indicação de licença aberta. Fichas do AniList não garantem vídeo reproduzível.</p>
+    <h2>Plugins de vídeo</h2><p class="desc">Até 18 manifestos Stremio compatíveis; sem conta no Sun. A disponibilidade e os direitos dependem de cada fonte.</p>
     ${(prefs.plugins||[]).map((url,i)=>`<div class="row plugin-row"><div><strong>Fonte ${i+1}</strong><small>${esc(url)}</small></div><button class="plugin-remove" data-action="remove-plugin" data-index="${i}" aria-label="Remover fonte ${i+1}">Remover</button></div>`).join('')}
     <form id="plugin-form"><label>Manifesto Stremio HTTPS<input required id="plugin-manifest" type="url" placeholder="https://provedor.exemplo/manifest.json"></label><button class="cta">Adicionar plugin</button></form>
     <h2>Extras oficiais</h2>${OFFICIAL_EPISODES.map(v=>`<a class="row" href="https://www.youtube.com/watch?v=${v.id}">${esc(v.title)} ${icon('external',16)}</a>`).join('')}`;
@@ -226,6 +231,9 @@ async function launch(m,index){
   if(['fhd','plugin'].includes(m.provider)&&!m.providerEpisodes){
     try{m=known(await AnimeProvider.detail(m));}catch{enter(m);return;}
   }
+  if(m.provider==='archive'&&!m.streams?.length){
+    try{m=known(await OpenArchive.detail(m));}catch{enter(m);return;}
+  }
   const eps=tracks(m);
   if(!eps.length){selected=m;detailTab='Episódios';render();return;}
   const h=prefs.history[m.id]||{}, last=eps.findIndex(e=>e.id===h.lastEpisode);
@@ -247,9 +255,10 @@ window.sunProgress=raw=>{
 async function enter(m){
   if(!m)return;if(!selected)homeScroll=window.scrollY;
   selected=m;editing=false;detailTab='Episódios';season='1';episodePage=0;detailError=false;
-  loadingSeries=['fhd','plugin'].includes(m.provider)&&!m.providerEpisodes;render();window.scrollTo(0,0);
+  loadingSeries=(['fhd','plugin'].includes(m.provider)&&!m.providerEpisodes)||
+    (m.provider==='archive'&&!m.streams?.length);render();window.scrollTo(0,0);
   if(!loadingSeries)return;
-  try{const full=known(await AnimeProvider.detail(m));if(selected?.id===m.id)selected=full;}
+  try{const full=known(await (m.provider==='archive'?OpenArchive.detail(m):AnimeProvider.detail(m)));if(selected?.id===m.id)selected=full;}
   catch{if(selected?.id===m.id)detailError=true;}
   finally{if(selected?.id===m.id){loadingSeries=false;render();}}
 }
@@ -267,6 +276,7 @@ app.addEventListener('click',e=>{
     case 'ep-next':episodePage++;break;
     case 'ep-prev':episodePage=Math.max(0,episodePage-1);break;
     case 'watch':if(m)launch(m,index===undefined?null:Number(index));return;
+    case 'selftest':launch(known(OpenMedia.sample()),0);return;
     case 'nav':selected=null;editing=false;tab=value;window.scrollTo(0,0);break;
     case 'back':back();return;
     case 'filter':filter=value;heroIndex=0;break;
@@ -299,7 +309,7 @@ app.addEventListener('submit',e=>{
     if(!url || !url.endsWith('/manifest.json')){toast('Use um endereço HTTPS terminado em /manifest.json');return;}
     if(!Array.isArray(prefs.plugins))prefs.plugins=[];
     if(prefs.plugins.includes(url)){toast('Plugin já adicionado');return;}
-    if(prefs.plugins.length>=6){toast('Limite de 6 plugins');return;}
+    if(prefs.plugins.length>=18){toast('Limite de 18 plugins');return;}
     prefs.plugins.push(url);persist();syncPlugins();render();toast('Plugin registrado.');return;
   }
   const url=external(document.getElementById('link-url').value.trim()), title=document.getElementById('link-name').value.trim();
