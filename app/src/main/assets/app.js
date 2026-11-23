@@ -128,7 +128,7 @@ function toolsPage(){
     <button class="row" data-action="link">${icon('plus')} Abrir link de vídeo</button>${editing?sourceForm(false):''}`;
 }
 function profile(){
-  return `<h1>Perfil</h1><div class="identity"><img src="./cinema/morevna.jpg" alt=""><div><strong>Meu perfil</strong><small>Sun 0.4.0</small></div></div>
+  return `<h1>Perfil</h1><div class="identity"><img src="./cinema/morevna.jpg" alt=""><div><strong>Meu perfil</strong><small>Sun 0.4.1</small></div></div>
     <button class="row" data-action="theme">${icon('moon')} Tema ${prefs.theme==='light'?'claro':'escuro'}</button>
     <button class="row" data-action="export">${icon('download')} Exportar biblioteca</button>
     <button class="row" data-action="import">${icon('upload')} Importar biblioteca</button>

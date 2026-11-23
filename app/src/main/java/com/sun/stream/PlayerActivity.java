@@ -93,7 +93,7 @@ public class PlayerActivity extends Activity {
             b.setBackground(bg);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,px(55));lp.bottomMargin=px(7);
             rows.addView(b,lp);b.setOnClickListener(v->{if(index!=episode){checkpoint();episode=index;quality=0;position=resumeAt();playWhenReady=true;updateEpisodes();startVideo();}});
         }
-        findViewById(R.id.quality).setVisibility(local==null && streams()!=null && streams().length()>1?View.VISIBLE:View.GONE);
+        findViewById(R.id.quality).setVisibility(local==null && streams()!=null && streams().length()>0?View.VISIBLE:View.GONE);
     }
     private void chooseQuality(){
         JSONArray sources=streams();if(sources==null)return;
@@ -123,8 +123,12 @@ public class PlayerActivity extends Activity {
                         Uri address=Uri.parse(option.optString("url"));
                         if(!"https".equalsIgnoreCase(address.getScheme())||address.getHost()==null)continue;
                         String title=option.optString("title",option.optString("name","Fonte "+(i+1)));
-                        choices.put(new JSONObject().put("url",address.toString()).put("quality",title)
-                            .put("subtitles",option.optJSONArray("subtitles")));
+                        JSONObject candidate = new JSONObject().put("url",address.toString()).put("quality",title)
+                            .put("subtitles",option.optJSONArray("subtitles"));
+                        if(option.has("mimeType"))candidate.put("mimeType",option.optString("mimeType"));
+                        JSONObject headers=option.optJSONObject("requestHeaders");
+                        if(headers!=null)candidate.put("requestHeaders",headers);
+                        choices.put(candidate);
                     }
                     if(choices.length()==0)throw new java.io.IOException("Sem vídeo direto");
                     runOnUiThread(()->{
@@ -133,7 +137,8 @@ public class PlayerActivity extends Activity {
                         updateEpisodes();startVideo();
                     });
                 }catch(Exception e){
-                    runOnUiThread(()->{if(visible&&ticket==request)error("O provedor não entregou um vídeo para este episódio. Tente novamente.");});
+                    runOnUiThread(()->{if(visible&&ticket==request)error("O provedor não entregou um vídeo direto reproduzível. " +
+                        "O catálogo pode ter episódios sem mídia disponível.");});
                 }
             });
             return;
@@ -143,16 +148,21 @@ public class PlayerActivity extends Activity {
         rendered=false;surface.setContentDescription("Carregando vídeo");
         try {
             Uri uri=local;
+            JSONObject variant=null;
             if(uri==null){
-                JSONObject variant=streams().getJSONObject(quality);
+                variant=streams().getJSONObject(quality);
                 uri=Uri.parse(variant.getString("url"));
                 if(!"https".equalsIgnoreCase(uri.getScheme())||uri.getHost()==null)throw new IllegalArgumentException();
             }
             MediaItem.Builder item=new MediaItem.Builder().setUri(uri);
             String path=uri.getPath()==null?"":uri.getPath().toLowerCase(java.util.Locale.ROOT);
-            if("hls".equals(current().optString("type")) || path.endsWith(".m3u8") ||
-                (online() && !path.endsWith(".mp4") && !path.endsWith(".mkv") && !path.endsWith(".webm")))
+            // Não pressupor HLS para links HTTPS sem extensão: páginas HTML não são vídeos.
+            String declared=variant==null ? "" : variant.optString("mimeType","").toLowerCase(java.util.Locale.ROOT);
+            if("hls".equalsIgnoreCase(current().optString("type")) || path.endsWith(".m3u8") ||
+                declared.contains("mpegurl") || declared.contains("m3u8") || "hls".equals(declared))
                 item.setMimeType(MimeTypes.APPLICATION_M3U8);
+            else if(path.endsWith(".mpd") || declared.contains("dash"))
+                item.setMimeType(MimeTypes.APPLICATION_MPD);
             if(online()){
                 JSONArray subs=streams().getJSONObject(quality).optJSONArray("subtitles");
                 List<MediaItem.SubtitleConfiguration> tracks=new ArrayList<>();
@@ -172,6 +182,20 @@ public class PlayerActivity extends Activity {
             }
             DefaultHttpDataSource.Factory http=new DefaultHttpDataSource.Factory().setUserAgent(CatalogApi.AGENT)
                 .setConnectTimeoutMs(15000).setReadTimeoutMs(25000);
+            // Cabeçalhos expressamente fornecidos pela fonte. Sem cookies, login ou contorno de proteção.
+            if(variant!=null){
+                JSONObject offered=variant.optJSONObject("requestHeaders");
+                if(offered!=null){
+                    java.util.Map<String,String> allowed=new java.util.HashMap<>();
+                    for(String header:new String[]{"Referer","Origin","User-Agent"}){
+                        String value=offered.optString(header,"");
+                        if(value.isEmpty())value=offered.optString(header.toLowerCase(java.util.Locale.ROOT),"");
+                        if(!value.isEmpty() && value.length()<=512 && value.indexOf('\n')<0 && value.indexOf('\r')<0)
+                            allowed.put(header,value);
+                    }
+                    if(!allowed.isEmpty())http.setDefaultRequestProperties(allowed);
+                }
+            }
             DefaultMediaSourceFactory sources=new DefaultMediaSourceFactory(new DefaultDataSource.Factory(this,http));
             ExoPlayer next=new ExoPlayer.Builder(this).setMediaSourceFactory(sources).setSeekBackIncrementMs(10000).setSeekForwardIncrementMs(10000).build();
             player=next;surface.setPlayer(next);
@@ -190,11 +214,22 @@ public class PlayerActivity extends Activity {
                     android.util.Log.w("SunPlayback","provider-error "+e.getErrorCodeName()+" "+episodeTag()+" "+safeError(e));
                     if(rendered)position=next.getCurrentPosition();
                     if(local==null && quality+1<streams().length()){quality++;surface.post(()->{if(player==next)startVideo();});}
-                    else error("Não foi possível reproduzir esta fonte. Confira sua conexão e tente de novo.");
+                    else error("Não foi possível reproduzir o episódio nas fontes disponíveis ("+failureReason(e)+"). " +
+                        "Isso pode indicar vídeo removido, formato incompatível ou resposta bloqueada pelo servidor. " +
+                        "Use Fonte e qualidade para conferir as opções.");
                 }
             });
             next.setMediaItem(item.build(),Math.max(0,position));next.prepare();next.setPlayWhenReady(playWhenReady);
         } catch(Exception e){error("O endereço deste vídeo não pôde ser aberto.");}
+    }
+    private String failureReason(PlaybackException error){
+        Throwable cause=error;
+        while(cause!=null){
+            if(cause instanceof androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException)
+                return "HTTP "+((androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException)cause).responseCode;
+            cause=cause.getCause();
+        }
+        return error.getErrorCodeName();
     }
     private String safeError(Throwable cause){
         StringBuilder out=new StringBuilder();

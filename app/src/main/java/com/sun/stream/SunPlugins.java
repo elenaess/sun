@@ -164,9 +164,17 @@ final class SunPlugins {
                         Uri link=Uri.parse(item.optString("url"));
                         if(!"https".equalsIgnoreCase(link.getScheme())||link.getHost()==null)continue;
                         String label=item.optString("title",item.optString("name","Vídeo"));
-                        out.put(new JSONObject().put("url",link.toString())
+                        JSONObject stream=new JSONObject().put("url",link.toString())
                             .put("title","Fonte "+source+" · "+label)
-                            .put("subtitles",item.optJSONArray("subtitles")));
+                            .put("subtitles",item.optJSONArray("subtitles"));
+                        // Compatibilidade com metadados de formato e headers padrão do protocolo.
+                        stream.put("mimeType",item.optString("mimeType",item.optString("type","")));
+                        JSONObject hints=item.optJSONObject("behaviorHints");
+                        JSONObject proxy=hints==null?null:hints.optJSONObject("proxyHeaders");
+                        JSONObject headers=proxy==null?null:proxy.optJSONObject("request");
+                        if(headers==null)headers=item.optJSONObject("requestHeaders");
+                        if(headers!=null)stream.put("requestHeaders",headers);
+                        out.put(stream);
                     }
                     return out;
                 }));
