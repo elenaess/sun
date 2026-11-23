@@ -24,6 +24,7 @@ public class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
+        SunPlugins.init(getApplicationContext());
         web = new WebView(this);
         web.setBackgroundColor(Color.rgb(16, 16, 18));
         WebSettings settings = web.getSettings();
@@ -98,6 +99,11 @@ public class MainActivity extends Activity {
                     String data=u.getQueryParameter("data");
                     if(data==null || data.length()>90000) throw new IllegalArgumentException();
                     startActivityForResult(new Intent(this,PlayerActivity.class).putExtra("data",data),PLAY);break;
+                case "plugins":
+                    String plugins=u.getQueryParameter("data");
+                    if(plugins==null || plugins.length()>5000 || !SunPlugins.install(plugins))
+                        throw new IllegalArgumentException("Manifestos inválidos");
+                    web.loadUrl(HOME);break;
                 case "file":
                     Intent pick=new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("video/*");
                     startActivityForResult(pick,FILE_PICK);break;

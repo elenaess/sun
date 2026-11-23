@@ -29,7 +29,7 @@ public class PlayerActivity extends Activity {
     private final ExecutorService network=Executors.newFixedThreadPool(2);
     private int request;
     private boolean visible;
-    private boolean online(){return media!=null && "fhd".equals(media.optString("provider"));}
+    private boolean online(){return media!=null && ("fhd".equals(media.optString("provider")) || "plugin".equals(media.optString("provider")));}
     private String episodeTag(){return online()?current().optString("id"):"acervo";}
     private PlayerView surface;
     private JSONObject media;
@@ -89,7 +89,7 @@ public class PlayerActivity extends Activity {
             Button b=new Button(this);b.setAllCaps(false);b.setGravity(Gravity.START|Gravity.CENTER_VERTICAL);
             b.setPadding(px(16),0,px(16),0);b.setText((i==episode?"▶    ":"▷    ")+ep.optString("name"));b.setTextColor(Color.WHITE);
             GradientDrawable bg=new GradientDrawable();bg.setColor(0xff242124);bg.setCornerRadius(px(12));
-            if(i==episode)bg.setStroke(px(1.3f),0xffff893a);
+            if(i==episode)bg.setStroke(px(1.3f),0xffbca8ff);
             b.setBackground(bg);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,px(55));lp.bottomMargin=px(7);
             rows.addView(b,lp);b.setOnClickListener(v->{if(index!=episode){checkpoint();episode=index;quality=0;position=resumeAt();playWhenReady=true;updateEpisodes();startVideo();}});
         }
@@ -99,7 +99,7 @@ public class PlayerActivity extends Activity {
         JSONArray sources=streams();if(sources==null)return;
         String[] names=new String[sources.length()];
         for(int i=0;i<names.length;i++)names[i]=sources.optJSONObject(i).optString("quality");
-        new AlertDialog.Builder(this).setTitle("Qualidade do vídeo").setSingleChoiceItems(names,quality,(dialog,index)->{
+        new AlertDialog.Builder(this).setTitle("Fonte e qualidade").setSingleChoiceItems(names,quality,(dialog,index)->{
             dialog.dismiss();if(index==quality)return;
             if(player!=null){position=player.getCurrentPosition();playWhenReady=player.getPlayWhenReady();}
             quality=index;startVideo();
@@ -116,7 +116,7 @@ public class PlayerActivity extends Activity {
             final String type=media.optString("mediaType");
             network.execute(()->{
                 try {
-                    JSONArray results=CatalogApi.streams(type,ep.getString("id")).optJSONArray("streams");
+                    JSONArray results=CatalogApi.streams(type,ep.getString("id"),media.optInt("sourceIndex",0)).optJSONArray("streams");
                     JSONArray choices=new JSONArray();
                     for(int i=0;results!=null&&i<results.length();i++){
                         JSONObject option=results.optJSONObject(i);if(option==null)continue;
