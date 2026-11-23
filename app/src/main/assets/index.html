@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#fbf7f7" />
+  <meta name="theme-color" content="#101012" />
   <meta name="description" content="Sun — descubra seus animes, filmes e séries em uma experiência leve." />
-  <meta name="color-scheme" content="light dark" />
+  <meta name="color-scheme" content="dark light" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" type="image/png" href="./icon-192.png" />
@@ -17,6 +17,9 @@
   <div id="app" role="application" aria-label="Sun"></div>
   <input id="localVideo" class="sr-only" type="file" accept="video/*,.m3u8" />
   <input id="importData" class="sr-only" type="file" accept=".json,application/json" />
+  <div id="notice" role="status" aria-live="polite"></div>
+  <dialog id="web-player"><div id="preview"></div><button id="close-preview">Fechar</button></dialog>
+  <script src="./icons.js" defer></script>
   <script src="./app.js" defer></script>
 </body>
 </html>

@@ -1,131 +1,125 @@
 package com.sun.stream;
 
 import android.app.Activity;
-import android.os.Bundle;
 import android.content.Intent;
-import android.net.Uri;
 import android.graphics.Color;
+import android.net.Uri;
+import android.os.Bundle;
 import android.view.View;
-import android.view.ViewGroup;
-import android.view.WindowManager;
-import android.webkit.CookieManager;
-import android.webkit.WebChromeClient;
-import android.webkit.WebResourceRequest;
-import android.webkit.WebResourceResponse;
-import android.webkit.WebSettings;
-import android.webkit.WebView;
-import android.webkit.WebViewClient;
-import java.io.InputStream;
-import java.io.ByteArrayInputStream;
-import java.util.HashMap;
-import java.util.Map;
+import android.view.WindowInsets;
+import android.webkit.*;
+import android.widget.Toast;
+import java.io.*;
+import java.net.URLConnection;
+import java.util.Collections;
+import org.json.*;
 
-/** Native Android shell for Sun's local, installable web UI. */
 public class MainActivity extends Activity {
-    private static final String HOME = "https://appassets.androidplatform.net/assets/index.html";
-    private static final int FILE_PICK = 1041;
-    private WebView webView;
-    private android.webkit.ValueCallback<Uri[]> fileCallback;
-    private View fullScreenView;
-    private WebChromeClient.CustomViewCallback fullScreenCallback;
+    static final String HOST = "appassets.androidplatform.net";
+    static final String HOME = "https://" + HOST + "/assets/index.html";
+    private static final int FILE_PICK = 41, PLAY = 42, IMPORT = 43, EXPORT = 44;
+    WebView web;
+    private ValueCallback<Uri[]> fileCallback;
+    private String exportText;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
-        getWindow().setStatusBarColor(Color.rgb(251,247,247));
-        getWindow().setNavigationBarColor(Color.rgb(251,247,247));
-        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
-
-        webView = new WebView(this);
-        webView.setBackgroundColor(Color.rgb(251,247,247));
-        WebSettings settings = webView.getSettings();
+        web = new WebView(this);
+        web.setBackgroundColor(Color.rgb(16, 16, 18));
+        WebSettings settings = web.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
-        settings.setMediaPlaybackRequiresUserGesture(false);
         settings.setAllowFileAccess(false);
-        settings.setAllowContentAccess(true);
-        settings.setSupportMultipleWindows(false);
-        settings.setJavaScriptCanOpenWindowsAutomatically(false);
-        CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
-        webView.setWebViewClient(new WebViewClient() {
+        settings.setAllowContentAccess(false);
+        web.setWebViewClient(new WebViewClient() {
             @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest req) {
-                Uri uri = req.getUrl();
-                if (!"https".equals(uri.getScheme()) || !"appassets.androidplatform.net".equals(uri.getHost())) return null;
-                String path = uri.getPath();
-                if (path == null || !path.startsWith("/assets/") || path.contains("..")) return notFound();
-                String name = path.substring("/assets/".length());
-                try {
-                    InputStream data = getAssets().open(name);
-                    String mime = "application/octet-stream";
-                    if (name.endsWith(".html")) mime = "text/html";
-                    else if (name.endsWith(".css")) mime = "text/css";
-                    else if (name.endsWith(".js")) mime = "text/javascript";
-                    else if (name.endsWith(".json") || name.endsWith(".webmanifest")) mime = "application/json";
-                    else if (name.endsWith(".png")) mime = "image/png";
-                    else if (name.endsWith(".svg")) mime = "image/svg+xml";
-                    else if (name.endsWith(".jpg") || name.endsWith(".jpeg")) mime = "image/jpeg";
-                    WebResourceResponse response = new WebResourceResponse(mime, "UTF-8", data);
-                    Map<String,String> headers = new HashMap<>();
-                    headers.put("Access-Control-Allow-Origin", "*");
-                    headers.put("Cache-Control", "no-cache");
-                    response.setResponseHeaders(headers);
-                    return response;
-                } catch (Exception e) { return notFound(); }
+                Uri u = req.getUrl();
+                if (!HOST.equals(u.getHost()) || !"https".equals(u.getScheme())) return null;
+                String p = u.getPath();
+                if (p != null && p.startsWith("/assets/") && !p.contains("..")) {
+                    String file = p.substring(8);
+                    try {
+                        String type = URLConnection.guessContentTypeFromName(file);
+                        if (file.endsWith(".js")) type="application/javascript";
+                        if (file.endsWith(".css")) type="text/css";
+                        if (file.endsWith(".webmanifest") || file.endsWith(".json")) type="application/json";
+                        return new WebResourceResponse(type == null ? "application/octet-stream" : type, "UTF-8", getAssets().open(file));
+                    } catch(IOException ignored) {}
+                }
+                return new WebResourceResponse("text/plain","UTF-8",404,"Not Found", Collections.emptyMap(),new ByteArrayInputStream(new byte[0]));
             }
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest req) {
-                Uri uri = req.getUrl();
-                if (!req.isForMainFrame() || "appassets.androidplatform.net".equals(uri.getHost())) return false;
-                if (!"https".equals(uri.getScheme()) && !"http".equals(uri.getScheme())) return true;
-                try {startActivity(new Intent(Intent.ACTION_VIEW,uri));} catch(Exception ignored){}
+                Uri u = req.getUrl();
+                if (!req.isForMainFrame()) return true;
+                if ("sun".equals(u.getScheme())) {
+                    if (HOME.equals(view.getUrl())) command(u);
+                    return true;
+                }
+                if ("https".equals(u.getScheme()) && HOST.equals(u.getHost())) return !HOME.equals(u.toString());
+                if ("https".equals(u.getScheme()) || "http".equals(u.getScheme())) {
+                    try {startActivity(new Intent(Intent.ACTION_VIEW,u));} catch(Exception ignored) {}
+                }
                 return true;
             }
         });
-        webView.setWebChromeClient(new WebChromeClient() {
-            @Override public boolean onShowFileChooser(WebView view, android.webkit.ValueCallback<Uri[]> callback, FileChooserParams params) {
-                if (fileCallback!=null) fileCallback.onReceiveValue(null);
-                fileCallback = callback;
-                Intent intent = params.createIntent();
-                try {startActivityForResult(intent,FILE_PICK);}
-                catch(Exception e){ fileCallback=null;callback.onReceiveValue(null);return false; }
-                return true;
-            }
-            @Override public void onShowCustomView(View view, CustomViewCallback callback) {
-                if (fullScreenView!=null) { callback.onCustomViewHidden(); return; }
-                fullScreenView = view;
-                fullScreenCallback = callback;
-                ((ViewGroup)getWindow().getDecorView()).addView(view, new ViewGroup.LayoutParams(-1,-1));
-                webView.setVisibility(View.GONE);
-                getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
-            }
-            @Override public void onHideCustomView() {
-                if(fullScreenView==null)return;
-                ((ViewGroup)getWindow().getDecorView()).removeView(fullScreenView);
-                fullScreenView=null;
-                webView.setVisibility(View.VISIBLE);
-                getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
-                if(fullScreenCallback!=null)fullScreenCallback.onCustomViewHidden();
-                fullScreenCallback=null;
+        web.setWebChromeClient(new WebChromeClient() {
+            @Override public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> cb, FileChooserParams params) {
+                if(fileCallback!=null) fileCallback.onReceiveValue(null);
+                fileCallback=cb;
+                try {startActivityForResult(params.createIntent(),IMPORT);return true;}
+                catch(Exception e){fileCallback=null;return false;}
             }
         });
-        setContentView(webView);
-        webView.loadUrl(HOME);
+        setContentView(web);
+        applyInsets(web);
+        if (state != null) exportText=state.getString("export");
+        web.loadUrl(HOME);
     }
-    private WebResourceResponse notFound() {
-        return new WebResourceResponse("text/plain", "UTF-8", 404, "Not Found",
-            new HashMap<String,String>(), new ByteArrayInputStream(new byte[0]));
+    static void applyInsets(View root) {
+        if (android.os.Build.VERSION.SDK_INT < 35) return;
+        root.setOnApplyWindowInsetsListener((v,w)->{
+            android.graphics.Insets p=w.getInsets(WindowInsets.Type.systemBars()|WindowInsets.Type.displayCutout()|WindowInsets.Type.ime());
+            v.setPadding(p.left,p.top,p.right,p.bottom); return w;
+        });
+        root.requestApplyInsets();
     }
-    @Override protected void onActivityResult(int code,int result,Intent intent){
-        super.onActivityResult(code,result,intent);
-        if(code!=FILE_PICK||fileCallback==null)return;
-        Uri[] results=WebChromeClient.FileChooserParams.parseResult(result,intent);
-        fileCallback.onReceiveValue(results);
-        fileCallback=null;
+    private void command(Uri u) {
+        try {
+            switch(String.valueOf(u.getHost())) {
+                case "play":
+                    String data=u.getQueryParameter("data");
+                    if(data==null || data.length()>90000) throw new IllegalArgumentException();
+                    startActivityForResult(new Intent(this,PlayerActivity.class).putExtra("data",data),PLAY);break;
+                case "file":
+                    Intent pick=new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("video/*");
+                    startActivityForResult(pick,FILE_PICK);break;
+                case "export":
+                    exportText=u.getQueryParameter("data");
+                    if(exportText==null) return;
+                    startActivityForResult(new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
+                        .setType("application/json").putExtra(Intent.EXTRA_TITLE,"sun-biblioteca.json"),EXPORT);break;
+            }
+        } catch(Exception e) { Toast.makeText(this,"Não foi possível abrir esta opção.",Toast.LENGTH_SHORT).show(); }
     }
-    @Override public void onBackPressed(){
-        if(fullScreenView!=null){webView.getWebChromeClient().onHideCustomView();return;}
-        webView.evaluateJavascript("Boolean(window.sunBack&&window.sunBack())",s->{if(!"true".equals(s)){if(webView.canGoBack())webView.goBack();else super.onBackPressed();}});
+    @Override protected void onActivityResult(int code,int result,Intent data) {
+        super.onActivityResult(code,result,data);
+        if(code==IMPORT && fileCallback!=null){fileCallback.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(result,data));fileCallback=null;return;}
+        if(result!=RESULT_OK || data==null) return;
+        if(code==PLAY) {
+            String payload=data.getStringExtra("progress");
+            if(payload!=null) web.evaluateJavascript("window.sunProgress && window.sunProgress("+JSONObject.quote(payload)+")",null);
+        } else if(code==FILE_PICK && data.getData()!=null) {
+            Uri uri=data.getData();
+            if(!"content".equals(uri.getScheme()))return;
+            startActivityForResult(new Intent(this,PlayerActivity.class).setData(uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION),PLAY);
+        } else if(code==EXPORT && data.getData()!=null && exportText!=null) {
+            try(OutputStream out=getContentResolver().openOutputStream(data.getData())){
+                if(out!=null)out.write(exportText.getBytes("UTF-8"));
+            } catch(IOException e){Toast.makeText(this,"Falha ao salvar o backup.",Toast.LENGTH_SHORT).show();}
+            exportText=null;
+        }
     }
-    @Override protected void onDestroy(){
-        if(webView!=null){webView.destroy();webView=null;}
-        super.onDestroy();
-    }
+    @Override protected void onSaveInstanceState(Bundle out){super.onSaveInstanceState(out);out.putString("export",exportText);}
+    @Override public void onBackPressed(){web.evaluateJavascript("Boolean(window.sunBack && window.sunBack())",v->{if(!"true".equals(v))super.onBackPressed();});}
+    @Override protected void onDestroy(){web.destroy();super.onDestroy();}
 }

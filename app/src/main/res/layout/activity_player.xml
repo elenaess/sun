@@ -1,0 +1,38 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/player_root" android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:background="#101012">
+    <LinearLayout android:id="@+id/player_toolbar" android:layout_width="match_parent" android:layout_height="52dp"
+        android:gravity="center_vertical" android:paddingHorizontal="8dp">
+        <Button android:id="@+id/player_back" style="?android:attr/borderlessButtonStyle" android:layout_width="50dp" android:layout_height="48dp"
+            android:text="←" android:textSize="24sp" android:contentDescription="Voltar" android:textColor="#FFFFFF"/>
+        <Space android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1"/>
+        <Button android:id="@+id/quality" style="?android:attr/borderlessButtonStyle" android:layout_width="wrap_content" android:layout_height="48dp"
+            android:text="Qualidade" android:textAllCaps="false" android:textColor="#F4EAE5"/>
+        <Button android:id="@+id/fullscreen" style="?android:attr/borderlessButtonStyle" android:layout_width="52dp" android:layout_height="48dp"
+            android:text="⛶" android:textSize="24sp" android:textColor="#FFFFFF" android:contentDescription="Tela cheia"/>
+    </LinearLayout>
+    <FrameLayout android:id="@+id/video_frame" android:layout_width="match_parent" android:layout_height="250dp" android:background="#000000">
+        <androidx.media3.ui.PlayerView android:id="@+id/native_video" android:layout_width="match_parent" android:layout_height="match_parent"
+            app:show_buffering="when_playing" app:show_subtitle_button="true" app:played_color="#FF8838" app:scrubber_color="#FF8838" app:buffered_color="#AA836A"/>
+        <LinearLayout android:id="@+id/play_error" android:layout_gravity="center" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:padding="16dp" android:gravity="center" android:orientation="vertical" android:background="#EE171719" android:visibility="gone">
+            <TextView android:id="@+id/error_message" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#FFFFFF" android:gravity="center"/>
+            <Button android:id="@+id/retry" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Tentar novamente" android:textAllCaps="false"/>
+        </LinearLayout>
+    </FrameLayout>
+    <ScrollView android:id="@+id/player_details" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
+        <LinearLayout android:orientation="vertical" android:layout_width="match_parent" android:layout_height="wrap_content" android:padding="20dp">
+            <TextView android:id="@+id/watch_title" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:textColor="#FAF7F4" android:textSize="23sp" android:textStyle="bold"/>
+            <TextView android:id="@+id/watch_episode" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="5dp" android:textColor="#C8C1BE" android:textSize="14sp"/>
+            <TextView android:id="@+id/list_title" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="28dp" android:textColor="#FAF7F4" android:textSize="19sp" android:textStyle="bold"/>
+            <LinearLayout android:id="@+id/episode_list" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="9dp" android:orientation="vertical"/>
+            <TextView android:id="@+id/watch_credit" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="18dp" android:textColor="#A9A2A0" android:textSize="12sp"/>
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

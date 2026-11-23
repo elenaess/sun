@@ -1,113 +1,221 @@
-/* Sun v0.1 — app instalável, sem bibliotecas externas. */
 (() => {
 'use strict';
-const API = 'https://graphql.anilist.co';
 const KEY = 'sun:settings:v1';
-const DEMO_URL = 'https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
-// Episódios publicados pelo próprio detentor dos direitos, em en.gundam-official.com/feature/gwoy/.
-// A disponibilidade regional e a permissão de incorporação podem variar.
-const OFFICIAL_EPISODES = [
-  {id:'2B_njMCRCvU',title:'Gundam: The Witch from Mercury',caption:'Episódio 1 · oficial'},
-  {id:'9isbRbLD2GE',title:'Gundam Unicorn RE:0096',caption:'Episódio 1 · oficial'},
-  {id:'U10iG69axKc',title:'Gundam SEED HD Remaster',caption:'Episódio 1 · oficial'},
-  {id:'YYqJMKhaLhk',title:'Mobile Suit Gundam — Filme I',caption:'Filme completo · oficial'}
-];
-const ICONS = {
- home:'<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/>',
- search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>',
- library:'<rect x="3" y="6" width="18" height="15" rx="2"/><path d="M7 6V3h10v3m-7 5 5 3-5 3z"/>',
- user:'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
- plus:'<path d="M12 5v14M5 12h14"/>',
- check:'<path d="m5 12 4 4L19 6"/>',
- play:'<path d="m8 5 12 7-12 7z"/>',
- heart:'<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/>',
- back:'<path d="m15 18-6-6 6-6"/>',
- chevron:'<path d="m9 18 6-6-6-6"/>',
- close:'<path d="M18 6 6 18M6 6l12 12"/>',
- external:'<path d="M14 4h6v6M20 4l-9 9M20 14v6H4V4h6"/>',
- star:'<path d="m12 3 2.7 5.8L21 10l-4.5 4.4 1 6.3L12 17.7l-5.5 3 1-6.3L3 10l6.3-1.2z"/>',
- sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
- moon:'<path d="M21 15a8.5 8.5 0 0 1-12-12A9 9 0 1 0 21 15"/>',
- upload:'<path d="M12 16V3m-5 5 5-5 5 5M4 16v4h16v-4"/>',
- download:'<path d="M12 3v13m-5-5 5 5 5-5M4 17v4h16v-4"/>',
- clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l4 2"/>',
- film:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="m3 9 18-4M8 5l3 4m3-4 3 3"/>',
- tv:'<rect x="3" y="6" width="18" height="14" rx="3"/><path d="M8 2l4 4 4-4"/>',
- info:'<circle cx="12" cy="12" r="10"/><path d="M12 11v6m0-11v1"/>',
- refresh:'<path d="M20 7V3l-4 4a8 8 0 1 0 3 10"/>',
- shield:'<path d="M12 2 4 5v6c0 5 3.5 8.5 8 11 4.5-2.5 8-6 8-11V5z"/>',
- share:'<path d="M12 16V3m-5 5 5-5 5 5M5 13v8h14v-8"/>',
- dots:'<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>'
+const app = document.getElementById('app');
+const videoOrigin = location.hostname === 'appassets.androidplatform.net';
+const catalog = new Map();
+let films = [], trending = [], results = [], heroIndex = 0, tab = 'home', filter = 'Início';
+let selected = null, detailTab = 'Episódios', query = '', searchSerial = 0, searchTimer, toastTimer, editing = false;
+let discovering = false, searchFailed = false, historyTab = false, homeScroll = 0;
+const defaults = {saved:{},history:{},sources:{},theme:'dark'};
+let prefs;
+try {prefs = Object.assign({}, defaults, JSON.parse(localStorage.getItem(KEY) || '{}'));} catch {prefs = {...defaults};}
+const name = m => m.name || m.title?.english || m.title?.romaji || 'Sem título';
+const format = m => m.kind || (m.format === 'MOVIE' ? 'Filme' : 'Série');
+const year = m => m.year || m.seasonYear || '';
+const external = value => {try {const u = new URL(value);return u.protocol === 'https:' ? u.href : '';} catch {return '';}};
+const cover = m => films.find(f => f.id === m.id)?.cover || external(m.bannerImage) || external(m.coverImage?.large);
+const subtitle = m => [m.genre || m.genres?.[0],year(m)].filter(Boolean).join(' · ');
+const node = (id) => catalog.get(String(id)) || prefs.saved[id]?.media || prefs.history[id]?.media;
+const art = m => cover(m) ? `<img class="art" src="${esc(cover(m))}" alt="" loading="lazy">` : '<span class="art blank"></span>';
+const btn = (action,label,symbol,attrs='') => `<button data-action="${action}" aria-label="${esc(label)}" title="${esc(label)}" ${attrs}>${icon(symbol,22)}</button>`;
+const persist = () => localStorage.setItem(KEY,JSON.stringify(prefs));
+function toast(message) {
+  const out=document.getElementById('notice');out.textContent=message;out.classList.add('shown');
+  clearTimeout(toastTimer);toastTimer=setTimeout(()=>out.classList.remove('shown'),2600);
+}
+function tracks(m) {
+  const original = films.find(f=>f.id===m.id);
+  const eps = original ? [{id:'main',name:original.episode,streams:original.streams,subtitle:original.subtitle}] : [];
+  const extras = Array.isArray(prefs.sources[m.id]) ? prefs.sources[m.id] : [];
+  return eps.concat(extras.filter(e=>e && external(e.streams?.[0]?.url)));
+}
+function playable(m){return tracks(m).length>0;}
+function known(m){catalog.set(String(m.id),m);return m;}
+function card(m,wide=false,continuing=false) {
+  const hist=prefs.history[m.id], ep=hist?.episodes?.[hist.lastEpisode];
+  const progress=ep?.duration?Math.min(100,Math.round(100*ep.position/ep.duration)):0;
+  return `<button class="card ${wide?'wide':''}" data-action="${continuing?'watch':'detail'}" data-id="${esc(m.id)}">
+    <span class="picture">${art(m)}${wide?`<i class="playover">${icon('play',18)}</i>`:''}</span>
+    <strong>${esc(name(m))}</strong><small>${esc(continuing && ep?.position ? Math.max(1,Math.ceil((ep.duration-ep.position)/60000))+' min restantes' : subtitle(m) || format(m))}</small>
+    ${continuing?`<span class="track"><i style="width:${progress}%"></i></span>`:''}</button>`;
+}
+function rail(label,items,wide=false,continuing=false) {
+  if(!items.length)return '';
+  return `<section><h2>${label}</h2><div class="rail">${items.map(m=>card(m,wide,continuing)).join('')}</div></section>`;
+}
+function filtered(items) {
+  if(filter==='Séries')return items.filter(m=>format(m)==='Série');
+  if(filter==='Filmes')return items.filter(m=>format(m)==='Filme');
+  return items;
+}
+function recent() {
+  return Object.values(prefs.history).sort((a,b)=>b.last-a.last).map(h=>h.media && (node(h.media.id)||h.media)).filter(Boolean);
+}
+function home(){
+  const pool=filtered(films);
+  if(!pool.length)return '<p class="muted">Carregando o acervo…</p>';
+  const i=heroIndex%pool.length,m=pool[i];
+  const ongoing=recent().filter(m=>{const h=prefs.history[m.id];return playable(m)&&!h?.episodes?.[h.lastEpisode]?.ended;});
+  return `<div class="filters">${['Início','Animes','Séries','Filmes'].map(f=>`<button class="${f===filter?'active':''}" data-action="filter" data-value="${f}">${f}</button>`).join('')}</div>
+    <article class="hero">${art(m)}<div class="shade"></div><button class="hero-info" data-action="detail" data-id="${m.id}"><span>${esc(format(m))} · ${year(m)}</span><h1>${esc(name(m))}</h1><small>${esc(m.genre)} · ${Math.ceil(m.duration/60)} min</small></button>
+    ${btn('watch','Assistir '+name(m),'play',`class="hero-play" data-id="${m.id}"`)}</article>
+    <div class="dots">${pool.map((f,n)=>`<button aria-label="Destaque ${esc(name(f))}" class="${n===i?'current':''}" data-action="slide" data-value="${n}"></button>`).join('')}</div>
+    ${rail('Continuar assistindo',ongoing,true,true)}
+    ${rail('Assistir no Sun',pool,true)}
+    ${rail('Em alta no AniList',filtered(trending).slice(0,12))}
+    ${filter==='Início'||filter==='Animes'?rail('Clássicos japoneses',films.filter(f=>f.year<1950)):''}`;
+}
+function search(){
+  const local=films.filter(f=>name(f).toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
+  const remote=query.trim()?results:trending;
+  return `<h1>Buscar</h1><label class="searchbox">${icon('search')}<input autocomplete="off" id="search" type="search" placeholder="Anime, série ou filme" value="${esc(query)}"></label>
+    ${local.length?`<h2>Assistir no Sun</h2><div class="grid">${local.map(m=>card(m)).join('')}</div>`:''}
+    ${remote.length?`<h2>${query?'No catálogo AniList':'Em alta no AniList'}</h2><div class="grid">${remote.map(m=>card(m)).join('')}</div>`:''}
+    ${discovering?'<p class="muted">Buscando no AniList…</p>':searchFailed?'<p class="muted">O AniList está indisponível agora.</p>':query&&!local.length&&!remote.length?'<p class="muted">Nenhum título encontrado.</p>':''}`;
+}
+function library(){
+  const items=historyTab?recent():Object.values(prefs.saved).map(a=>a.media&&(node(a.media.id)||a.media)).filter(Boolean);
+  return `<h1>Biblioteca</h1><div class="filters"><button data-action="saved" class="${historyTab?'':'active'}">Minha lista</button><button data-action="recent" class="${historyTab?'active':''}">Recentes</button></div>
+    ${items.length?`<div class="grid">${items.map(m=>card(m)).join('')}</div>`:`<p class="empty">${historyTab?'Os vídeos que você assistir aparecem aqui.':'Toque no marcador de um título para guardar na sua lista.'}</p>`}`;
+}
+function toolsPage(){
+  return `<h1>Meus vídeos</h1><button class="row" data-action="file">${icon('film')} Abrir arquivo do celular</button>
+    <button class="row" data-action="link">${icon('plus')} Abrir link de vídeo</button>${editing?sourceForm(false):''}`;
+}
+function profile(){
+  return `<h1>Perfil</h1><div class="identity"><img src="./cinema/morevna.jpg" alt=""><div><strong>Meu perfil</strong><small>Sun 0.2.0</small></div></div>
+    <button class="row" data-action="theme">${icon('moon')} Tema ${prefs.theme==='light'?'claro':'escuro'}</button>
+    <button class="row" data-action="export">${icon('download')} Exportar biblioteca</button>
+    <button class="row" data-action="import">${icon('upload')} Importar biblioteca</button>
+    <h2>Extras oficiais</h2>${OFFICIAL_EPISODES.map(v=>`<a class="row" href="https://www.youtube.com/watch?v=${v.id}">${esc(v.title)} ${icon('external',16)}</a>`).join('')}`;
+}
+const screens={home,search,library,videos:toolsPage,profile};
+function nav(){
+  return `<nav aria-label="Navegação principal">${[['home','Início','home'],['search','Buscar','search'],['videos','Meus vídeos','tv'],['library','Biblioteca','library'],['profile','Perfil','user']].map(([k,label,ic])=>
+    `<button data-action="nav" data-value="${k}" aria-label="${label}" title="${label}" class="${tab===k?'here':''}">${k==='profile'?'<img class="avatar" src="./cinema/morevna.jpg" alt="">':icon(ic)}<span>${label}</span></button>`).join('')}</nav>`;
+}
+function sourceForm(named){
+  return `<form id="source-form"><label>${named?'Nome do episódio':'Nome do vídeo'}<input id="link-name" required maxlength="120" placeholder="${named?'Ex. Episódio 1':'Meu vídeo'}"></label><label>Link direto HTTPS<input id="link-url" required type="url" placeholder="https://…/video.mp4 ou lista.m3u8"></label><button class="cta">${named?'Salvar episódio':'Reproduzir'}</button></form>`;
+}
+function detail(m){
+  const eps=tracks(m), saved=!!prefs.saved[m.id], history=prefs.history[m.id];
+  const source=external(m.source), license=external(m.licenseUrl);
+  const links=(Array.isArray(m.externalLinks)?m.externalLinks:[]).filter(l=>external(l.url)&&l.type==='STREAMING').slice(0,5);
+  const shorts=films.filter(f=>f.id!==m.id).slice(0,4);
+  return `<article class="detail"><div class="detail-art">${art(m)}<div class="shade"></div>${btn('back','Voltar','back','class="round back"')}</div>
+    <div class="detail-body"><div class="detail-heading"><div class="poster">${art(m)}</div><div><h1>${esc(name(m))}</h1><div class="tags"><b>${esc(format(m))}</b>${year(m)?`<span>${year(m)}</span>`:''}</div></div></div>
+    <div class="actions">${eps.length?`<button class="cta" data-action="watch" data-id="${esc(m.id)}">${icon('play',19)} ${history?.episodes?.[history.lastEpisode]?.position?'Continuar':'Assistir'}</button>`:`<button class="cta secondary" data-action="link">${icon('plus',18)} Vincular episódio</button>`}${btn('save',saved?'Remover da lista':'Salvar na lista',saved?'check':'library',`class="round save" data-id="${esc(m.id)}"`)}</div>
+    <p class="desc">${esc((m.desc||m.description||'').replace(/<[^>]*>/g,'').slice(0,420))}</p>
+    <div class="tabs">${['Episódios','Detalhes','Relacionados'].map(t=>`<button data-action="pane" data-value="${t}" class="${t===detailTab?'selected':''}">${t}</button>`).join('')}</div>
+    ${detailTab==='Episódios'?`${eps.map((e,i)=>`<button class="episode" data-action="watch" data-id="${esc(m.id)}" data-index="${i}"><span class="thumb">${art(m)}</span><span><strong>${esc(e.name)}</strong><small>${m.duration?Math.ceil(m.duration/60)+' min': 'Fonte de vídeo'}</small></span><i>${icon('play',16)}</i></button>`).join('')}
+      ${eps.length?'<button class="text-btn" data-action="link">+ Vincular outro episódio</button>':'<p class="muted">Este título tem ficha no AniList. Para assistir no Sun, vincule um link direto de vídeo.</p>'}${editing?sourceForm(true):''}`:
+      detailTab==='Detalhes'?`<h2>Sobre o título</h2><p>${esc(subtitle(m))}</p>${m.creator?`<p>${esc(m.creator)} · ${esc(m.license)}</p>`:''}
+       ${source?`<a class="row" href="${esc(source)}">Ficha da fonte ${icon('external',16)}</a>`:''}${license?`<a class="row" href="${esc(license)}">Licença da obra ${icon('external',16)}</a>`:''}
+       ${m.trailer?.site?.toLowerCase()==='youtube'&&/^[\w-]{11}$/.test(m.trailer.id)?`<a class="row" href="https://www.youtube.com/watch?v=${esc(m.trailer.id)}">Trailer no YouTube</a>`:''}
+       ${links.map(l=>`<a class="row" href="${esc(external(l.url))}">${esc(l.site)} ${icon('external',16)}</a>`).join('')}`:
+      `<div class="grid">${shorts.map(f=>card(f)).join('')}</div>`}</div></article>`;
+}
+function render(){
+  document.documentElement.dataset.theme=prefs.theme==='light'?'light':'dark';
+  app.innerHTML=selected?detail(selected):`<div class="frame"><header><button aria-label="Início" data-action="nav" data-value="home"><img class="symbol" src="./symbol.png" alt="Sun"></button><div></div>${btn('nav','Buscar','search','data-value="search"')}${btn('recent','Histórico','clock')}<button data-action="nav" data-value="profile" aria-label="Perfil"><img class="avatar" src="./cinema/morevna.jpg" alt=""></button></header><main>${screens[tab]()}</main>${nav()}</div>`;
+}
+function back(){
+  if(editing){editing=false;render();return true;}
+  if(selected){selected=null;render();window.scrollTo(0,homeScroll);return true;}
+  if(tab!=='home'){tab='home';render();window.scrollTo(0,0);return true;}
+  return false;
+}
+window.sunBack=back;
+let swipeStart=null;
+app.addEventListener('touchstart',e=>{swipeStart=e.target.closest('.hero')?e.touches[0].clientX:null;},{passive:true});
+app.addEventListener('touchend',e=>{
+  if(swipeStart===null)return;
+  const delta=e.changedTouches[0].clientX-swipeStart;
+  swipeStart=null;
+  if(Math.abs(delta)<55)return;
+  const count=filtered(films).length;heroIndex=(heroIndex+(delta<0?1:-1)+count)%count;render();
+},{passive:true});
+const fields='id title {romaji english} format seasonYear genres description(asHtml:false) coverImage {large} bannerImage trailer {id site} externalLinks {site url type}';
+async function discover(term=''){
+  const seq=++searchSerial;
+  const ctrl=new AbortController(), timer=setTimeout(()=>ctrl.abort(),10000);
+  try {
+    const q='query($search:String,$sort:[MediaSort]){Page(perPage:15){media(type:ANIME,isAdult:false,search:$search,sort:$sort){'+fields+'}}}';
+    const r=await fetch('https://graphql.anilist.co',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:q,variables:{search:term||null,sort:[term?'SEARCH_MATCH':'TRENDING_DESC']}}),signal:ctrl.signal});
+    if(!r.ok)throw Error(r.status);const data=await r.json();
+    if(seq!==searchSerial)return;const rows=(data.data?.Page?.media||[]).map(known);
+    if(term)results=rows;else trending=rows;searchFailed=false;
+  }catch{if(seq===searchSerial)searchFailed=true;}finally{
+    clearTimeout(timer);
+    if(seq===searchSerial){discovering=false;if(!selected&&(tab==='home'||tab==='search')){const focus=document.activeElement?.id==='search';const caret=focus?document.activeElement.selectionStart:0;render();if(focus){const input=document.getElementById('search');input.focus();input.setSelectionRange(caret,caret);}}}
+  }
+}
+function launch(m,index){
+  const eps=tracks(m);
+  if(!eps.length){selected=m;detailTab='Episódios';render();return;}
+  const h=prefs.history[m.id]||{}, last=eps.findIndex(e=>e.id===h.lastEpisode);
+  const chosen=Number.isInteger(index)?index:Math.max(0,last);
+  const data={id:String(m.id),title:name(m),series:format(m)==='Série',credit:[m.creator,m.license].filter(Boolean).join(' · '),index:chosen,
+    episodes:eps.map(e=>({...e,position:h.episodes?.[e.id]?.position||0}))};
+  if(videoOrigin)location.href='sun://play?data='+encodeURIComponent(JSON.stringify(data));
+  else {const video=document.createElement('video');video.controls=true;video.autoplay=true;video.src=eps[chosen].streams[0].url;document.getElementById('preview').replaceChildren(video);document.getElementById('web-player').showModal();}
+}
+window.sunProgress=raw=>{
+  const p=JSON.parse(raw),m=node(p.id);if(!m)return;
+  const old=prefs.history[p.id]||{};
+  prefs.history[p.id]={...old,media:m,last:Date.now(),lastEpisode:p.last,episodes:{...old.episodes,...p.episodes}};persist();render();
 };
-function icon(name,size=20){return `<svg aria-hidden="true" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]||ICONS.info}</svg>`;}
-function esc(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-function validURL(raw){try{const x=new URL(raw);return ['http:','https:'].includes(x.protocol)?x.toString():'';}catch{return '';}}
-function load(){try{const s=JSON.parse(localStorage.getItem(KEY)||'{}');return {saved:s.saved||{},history:s.history||{},theme:s.theme==='dark'?'dark':'light'};}catch{return {saved:{},history:{},theme:'light'};}}
-const persisted=load();
-const seed=[
- {id:1,title:{romaji:'Cowboy Bebop'},description:'Um grupo de caçadores de recompensas cruza o espaço em busca de histórias e encontros inesperados.',format:'TV',genres:['Ação','Ficção científica'],averageScore:87,color:'#937bba',coverImage:{},trailer:null,streamingEpisodes:[]},
- {id:2,title:{romaji:'Spirited Away',english:'A Viagem de Chihiro'},description:'Uma aventura fantástica em um mundo de espíritos.',format:'MOVIE',genres:['Fantasia','Aventura'],averageScore:89,color:'#ea9c80',coverImage:{},trailer:null,streamingEpisodes:[]},
- {id:3,title:{romaji:'Frieren: Beyond Journey’s End',english:'Frieren e a Jornada para o Além'},description:'O tempo passa de maneiras diferentes para uma elfa em uma longa jornada.',format:'TV',genres:['Aventura','Fantasia'],averageScore:93,color:'#82aec6',coverImage:{},trailer:null,streamingEpisodes:[]},
- {id:4,title:{romaji:'Your Name.',english:'Your Name.'},description:'Dois jovens descobrem uma conexão misteriosa.',format:'MOVIE',genres:['Romance','Drama'],averageScore:90,color:'#d99aad',coverImage:{},trailer:null,streamingEpisodes:[]}
-];
-const state={screen:'home',filter:'all',query:'',loaded:false,loading:true,error:'',catalog:{trending:seed,popular:seed,films:seed.filter(x=>x.format==='MOVIE'),series:seed.filter(x=>x.format==='TV')},searchResults:[],searchLoading:false,searchError:'',media:new Map(seed.map(x=>[String(x.id),x])),selected:null,detailLoading:false,player:null,playerObjectUrl:null,saved:persisted.saved,history:persisted.history,theme:persisted.theme,libFilter:'saved'};
-const GQL_FIELDS=`id title { romaji english native } description(asHtml: false) coverImage { large extraLarge color } bannerImage format episodes duration averageScore seasonYear genres status isAdult trailer { id site thumbnail } streamingEpisodes { title thumbnail url site } externalLinks { site url type }`;
-const Q_PAGE=`query ($sort:[MediaSort], $format:MediaFormat, $search:String, $perPage:Int){Page(page:1,perPage:$perPage){media(type:ANIME,isAdult:false,sort:$sort,format:$format,search:$search){${GQL_FIELDS}}}}`;
-const Q_DETAIL=`query ($id:Int){Media(id:$id,type:ANIME,isAdult:false){${GQL_FIELDS}}}`;
-let currentRequest=0;let debounce=null;let toastTimer=null;let fileURL=null;
-function persist(){try{localStorage.setItem(KEY,JSON.stringify({saved:state.saved,history:state.history,theme:state.theme}));}catch{notify('Armazenamento cheio. Exporte seus dados.');}}
-function remember(media){if(media&&media.id)state.media.set(String(media.id),media);return media;}
-async function queryGraph(query,variables){const ctrl=new AbortController();const timer=setTimeout(()=>ctrl.abort(),14000);try{const res=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({query,variables}),signal:ctrl.signal});if(!res.ok)throw new Error(`Catálogo indisponível (${res.status})`);const data=await res.json();if(data.errors?.length)throw new Error(data.errors[0].message||'Erro do catálogo');return data.data;}finally{clearTimeout(timer);}}
-async function getPage(options={}){const data=await queryGraph(Q_PAGE,{sort:options.sort||['TRENDING_DESC'],perPage:options.limit||15,format:options.format||null,search:options.search||null});return (data?.Page?.media||[]).filter(x=>x&&!x.isAdult).map(remember);}
-function title(m){return m?.title?.english||m?.title?.romaji||m?.title?.native||'Título sem nome';}
-function img(m,wide=false){return validURL(wide?m?.bannerImage||m?.coverImage?.extraLarge:m?.coverImage?.extraLarge||m?.coverImage?.large);}
-function summary(m){const raw=String(m?.description||'Explore essa história no Sun.').replace(/<[^>]*>/g,'').replace(/&nbsp;/g,' ');return raw.length>290?raw.slice(0,290).trim()+'…':raw;}
-function typeName(m){return m?.format==='MOVIE'?'Filme':m?.format==='TV'?'Série':'Anime';}
-function storeItem(m){return {id:m.id,title:m.title,description:m.description,coverImage:m.coverImage,bannerImage:m.bannerImage,averageScore:m.averageScore,format:m.format,episodes:m.episodes,genres:m.genres,trailer:m.trailer,streamingEpisodes:m.streamingEpisodes,externalLinks:m.externalLinks,seasonYear:m.seasonYear};}
-function isSaved(id){return !!state.saved[id];}
-function progress(id){return Math.min(100,Math.max(0,state.history[id]?.progress||0));}
-function notify(message){let el=document.querySelector('.toast');if(!el)return;el.textContent=message;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),2800);}
-function renderPoster(m){const u=img(m);return `<button class="poster" data-action="detail" data-id="${m.id}" aria-label="Abrir ${esc(title(m))}"><div class="art" style="background:${esc(m.coverImage?.color||m.color||'linear-gradient(145deg,#f3baa8,#ada5da)')}">${u?`<img loading="lazy" src="${esc(u)}" alt="" />`:''}${m.averageScore?`<div class="rating">${icon('star',11)} ${(m.averageScore/10).toFixed(1)}</div>`:''}${isSaved(m.id)?`<span class="heart">${icon('heart',14)}</span>`:''}</div><div class="poster-name">${esc(title(m))}</div><div class="tiny">${esc(typeName(m))}${m.seasonYear?' · '+m.seasonYear:''}</div></button>`;}
-function section(label,items,action){return `<section class="section"><div class="sect-head"><h2>${esc(label)}</h2><button class="see" data-action="filter" data-filter="${esc(action||'all')}">Ver tudo ${icon('chevron',13)}</button></div>${items.length?`<div class="rail">${items.map(renderPoster).join('')}</div>`:`<div class="empty">Ainda não há títulos nesta seção.</div>`}</section>`;}
-function skeleton(){return `<div class="hero skeleton" style="min-height:218px"></div>${[1,2].map(()=>`<section class="section"><div class="skeleton loading-line"></div><div class="rail">${[1,2,3].map(()=>'<div class="skeleton loading-cover"></div>').join('')}</div></section>`).join('')}`;}
-function officialSection(){return `<section class="section"><div class="sect-head"><h2>Assistir grátis e oficialmente</h2><span class="see">Gundam Channel INTL</span></div><div class="rail">${OFFICIAL_EPISODES.map((v,i)=>`<button class="poster" data-action="official-video" data-index="${i}" aria-label="Assistir ${esc(v.title)}"><div class="art"><img loading="lazy" src="https://i.ytimg.com/vi/${v.id}/hqdefault.jpg" alt=""/><span class="heart">${icon('play',14)}</span></div><div class="poster-name">${esc(v.title)}</div><div class="tiny">${esc(v.caption)}</div></button>`).join('')}</div><p class="tiny" style="margin-top:9px">YouTube oficial · a disponibilidade muda por região e pode exigir abrir no YouTube.</p></section>`;}
-function continueSection(){const ids=Object.keys(state.history).sort((a,b)=>state.history[b].last-state.history[a].last).slice(0,10);if(!ids.length)return '';const entries=ids.map(id=>state.history[id]?.media||state.media.get(id)).filter(Boolean);return `<section class="section"><div class="sect-head"><h2>Continuar assistindo</h2><button class="see" data-action="goto" data-screen="library">Ver tudo ${icon('chevron',13)}</button></div><div class="rail">${entries.map(m=>{const u=img(m,true);return `<button class="continue-card" data-action="detail" data-id="${m.id}">${u?`<img src="${esc(u)}" loading="lazy" alt="" />`:''}<div class="continue-info"><strong>${esc(title(m))}</strong><small>${Math.round(progress(m.id))}% · Retomar</small><div class="track"><span style="width:${progress(m.id)}%"></span></div></div></button>`;}).join('')}</div></section>`;}
-function home(){const c=state.catalog;const featured=c.trending[0]||seed[0];const u=img(featured,true);return `<div class="page content"><div class="intro">Histórias que iluminam seu dia ✨</div>${state.loading?skeleton():`<article class="hero"><div class="hero-photo" ${u?`style="background-image:url('${esc(u)}')"`:''}></div><div class="hero-body"><span class="chip">${icon('sun',13)} Em destaque</span><h1>${esc(title(featured))}</h1><p>${esc(summary(featured).slice(0,100))}</p><div class="hero-actions"><button class="cta" data-action="detail" data-id="${featured.id}">${icon('play',17)} Explorar</button><button class="ghost" data-action="save" data-id="${featured.id}" aria-label="Salvar na biblioteca">${icon(isSaved(featured.id)?'check':'plus')}</button></div></div></article>${continueSection()}${officialSection()}${section('Em alta',c.trending,'all')}${section('Animes para maratonar',c.popular,'series')}${section('Filmes de anime',c.films,'films')}${section('Séries',c.series,'series')}`}<div class="banner-note"><strong>Vídeos no Sun 🍿</strong>Assista trailers e episódios oficialmente disponibilizados, ou abra seus próprios arquivos de vídeo. Sem prometer conteúdos que as fontes não disponibilizam.<button data-action="demo">${icon('play',14)} Testar player de vídeo</button></div></div>`;}
-function search(){const items=state.searchResults.length?state.searchResults:state.filter==='films'?state.catalog.films:state.filter==='series'?state.catalog.series:state.catalog.trending;return `<div class="page content"><div class="intro">O que vamos assistir hoje?</div><div class="search-box">${icon('search',20)}<input id="searchInput" autocomplete="off" spellcheck="false" value="${esc(state.query)}" placeholder="Anime, filme ou título..." aria-label="Buscar animes"/><button data-action="clear-search" aria-label="Limpar busca">${icon('close',16)}</button></div><div class="pills" style="margin-top:14px">${[['all','Todos'],['series','Séries'],['films','Filmes de anime']].map(([id,label])=>`<button class="filter ${id===state.filter?'active':''}" data-action="filter" data-filter="${id}">${label}</button>`).join('')}</div><div class="sect-head" style="margin:12px 0"><h2>${state.query?'Resultados':'Descobrir'}</h2>${state.searchLoading?'<span class="spinner" style="margin:0;width:18px;height:18px"></span>':''}</div>${state.searchError?`<div class="error-info">${esc(state.searchError)}<br/><button class="see" data-action="retry">Tentar novamente</button></div>`:''}${items.length?`<div class="grid-posters">${items.map(renderPoster).join('')}</div>`:`<div class="empty">Nenhum título encontrado. Tente outra busca.</div>`}</div>`;}
-function library(){const saved=Object.values(state.saved).map(x=>x.media).filter(Boolean);const history=Object.values(state.history).sort((a,b)=>b.last-a.last).map(x=>x.media).filter(Boolean);const items=state.libFilter==='saved'?saved:history;return `<div class="page content"><p class="intro">Suas histórias, do seu jeito.</p><div class="stat-list"><button class="stat" data-action="lib-tab" data-filter="saved">${icon('heart',23)}<strong>${saved.length}</strong><span>Minha lista</span></button><button class="stat" data-action="lib-tab" data-filter="recent">${icon('clock',23)}<strong>${history.length}</strong><span>Recentes</span></button></div><div class="sect-head" style="margin-top:24px"><h2>Biblioteca</h2><button class="see" data-action="open-file">${icon('plus',14)} Meu vídeo</button></div><div class="pills"><button class="filter ${state.libFilter==='saved'?'active':''}" data-action="lib-tab" data-filter="saved">Minha lista</button><button class="filter ${state.libFilter==='recent'?'active':''}" data-action="lib-tab" data-filter="recent">Assistidos recentemente</button></div>${items.length?`<div class="grid-posters">${items.map(renderPoster).join('')}</div>`:`<div class="empty">${icon('library',31)}Sua ${state.libFilter==='saved'?'lista ainda está vazia. Toque em + em qualquer título para salvar.':'lista de recentes aparece quando você abre um player.'}</div>`}<div class="banner-note"><strong>Seu próprio player</strong>Você pode selecionar um vídeo MP4/WebM do celular e reproduzir dentro do Sun. O arquivo não é enviado para nenhum servidor.<button data-action="open-file">${icon('play',14)} Escolher vídeo do celular</button></div></div>`;}
-function profile(){return `<div class="page content"><div class="intro">Ajustes e ferramentas do Sun.</div><div class="stat-list"><div class="stat">${icon('sun',23)}<strong>0.1.1</strong><span>Versão do app</span></div><div class="stat">${icon('shield',23)}<strong>Local</strong><span>Dados neste aparelho</span></div></div><section class="section"><div class="sect-head"><h2>Personalização</h2></div><div class="settings-list"><button class="setting" data-action="theme">${icon(state.theme==='dark'?'sun':'moon',23)}<span class="setting-info"><strong>${state.theme==='dark'?'Modo escuro':'Modo claro'}</strong><small>Alternar o tema do aplicativo</small></span>${icon('chevron',17)}</button><button class="setting" data-action="open-file">${icon('film',23)}<span class="setting-info"><strong>Abrir vídeo local</strong><small>MP4, WebM ou outro formato aceito pelo dispositivo</small></span>${icon('chevron',17)}</button><button class="setting" data-action="demo">${icon('play',23)}<span class="setting-info"><strong>Vídeo de teste</strong><small>Exemplo de reprodução — Big Buck Bunny</small></span>${icon('chevron',17)}</button></div></section><section class="section"><div class="sect-head"><h2>Seus dados</h2></div><div class="settings-list"><button class="setting" data-action="export">${icon('download',23)}<span class="setting-info"><strong>Exportar biblioteca</strong><small>Salvar lista e histórico em JSON</small></span>${icon('chevron',17)}</button><button class="setting" data-action="import">${icon('upload',23)}<span class="setting-info"><strong>Importar biblioteca</strong><small>Restaurar backup do Sun</small></span>${icon('chevron',17)}</button><button class="setting" data-action="reload">${icon('refresh',23)}<span class="setting-info"><strong>Atualizar catálogo</strong><small>Buscar os dados atuais dos animes</small></span>${icon('chevron',17)}</button></div></section><div class="banner-note"><strong>Sobre o catálogo</strong>Metadados fornecidos pela API pública do AniList. Os vídeos completos dependem de fontes oficiais, direitos e disponibilidade regional. Não armazenamos nem contornamos DRM ou assinaturas.</div></div>`;}
-function topbar(){const homeTab=state.screen==='home';const titles={search:'Buscar',library:'Biblioteca',profile:'Perfil'};return `<header class="top"><img class="logo" src="./icon-192.png" alt="Sun"/>${homeTab?`<span class="brand">Sun</span>`:`<span class="top-title">${titles[state.screen]}</span>`}<span class="grow"></span>${homeTab?`<button class="circle" aria-label="Buscar" data-action="goto" data-screen="search">${icon('search',21)}</button>`:''}<button class="avatar" aria-label="Perfil" data-action="goto" data-screen="profile">S</button></header>`;}
-function navbar(){const tabs=[['home','Início','home'],['search','Buscar','search'],['library','Biblioteca','library'],['profile','Perfil','user']];const idx=tabs.findIndex(x=>x[0]===state.screen);return `<nav class="nav" aria-label="Navegação principal"><div class="nav-indicator" style="transform:translateX(calc(${idx} * (100% + 18px)))"></div>${tabs.map(([id,label,i])=>`<button class="nav-btn ${state.screen===id?'active':''}" data-action="goto" data-screen="${id}" ${state.screen===id?'aria-current="page"':''}>${icon(i,21)}<span>${label}</span></button>`).join('')}</nav>`;}
-function mount(){document.documentElement.dataset.theme=state.theme;const app=document.getElementById('app');app.innerHTML=`<div class="app"><div class="shell">${topbar()}<main class="scroll" id="mainScroll">${state.screen==='home'?home():state.screen==='search'?search():state.screen==='library'?library():profile()}</main>${navbar()}<div id="modal"></div><div id="player"></div><div class="toast" role="status" aria-live="polite"></div></div></div>`;renderModal();renderPlayer();}
-function goto(screen){if(!['home','search','library','profile'].includes(screen))return;if(state.selected)closeDetail(true);if(state.player)closePlayer();if(state.screen===screen){const sc=document.querySelector('#mainScroll');if(sc)sc.scrollTo({top:0,behavior:'smooth'});return;}state.screen=screen;mount();if(screen==='search')document.querySelector('#searchInput')?.focus({preventScroll:true});}
-function setFilter(filter){state.filter=['all','series','films'].includes(filter)?filter:'all';state.screen='search';state.searchResults=[];mount();if(state.query)doSearch();}
-function toggleSave(id){const media=state.media.get(String(id))||state.selected;if(!media)return;if(isSaved(id)){delete state.saved[id];notify('Removido da sua lista');}else{state.saved[id]={media:storeItem(media),added:Date.now()};notify('Salvo na sua lista ♡');}persist();renderModal();if(!state.selected)mount();}
-function touchHistory(media,percent=0){if(!media)return;const k=String(media.id);state.history[k]={media:storeItem(media),last:Date.now(),progress:Math.max(percent,progress(k))};persist();}
-async function loadHome(force=false){if(state.loaded&&!force)return;state.loading=true;if(force)mount();try{const jobs=await Promise.allSettled([getPage({sort:['TRENDING_DESC'],limit:14}),getPage({sort:['POPULARITY_DESC'],format:'TV',limit:14}),getPage({sort:['SCORE_DESC'],format:'MOVIE',limit:14}),getPage({sort:['TRENDING_DESC'],format:'TV',limit:14})]);for(const [i,key] of ['trending','popular','films','series'].entries()){if(jobs[i].status==='fulfilled'&&jobs[i].value.length)state.catalog[key]=jobs[i].value;}state.error=jobs.every(j=>j.status==='rejected')?'Sem conexão com o AniList; mostrando exemplos locais.':'';state.loaded=true;}catch(e){state.error=String(e?.message||e);}finally{state.loading=false;mount();if(state.error)notify(state.error);}}
-async function doSearch(){const serial=++currentRequest;const q=state.query.trim();if(!q){state.searchResults=[];state.searchLoading=false;state.searchError='';mount();return;}state.searchLoading=true;state.searchError='';try{const results=await getPage({search:q,format:state.filter==='films'?'MOVIE':state.filter==='series'?'TV':null,sort:['SEARCH_MATCH'],limit:24});if(serial!==currentRequest)return;state.searchResults=results;}catch(e){if(serial!==currentRequest)return;state.searchResults=[];state.searchError='A busca está temporariamente indisponível. Verifique sua internet.';}finally{if(serial===currentRequest){state.searchLoading=false;const active=document.activeElement?.id==='searchInput';const selection=active?document.activeElement.selectionStart:null;mount();const input=document.querySelector('#searchInput');if(active&&input){input.focus({preventScroll:true});input.setSelectionRange(selection,selection);}}}}
-function youtubeID(raw){try{const u=new URL(raw);if(['youtu.be','www.youtu.be'].includes(u.hostname))return u.pathname.slice(1).split('/')[0];if(['youtube.com','www.youtube.com','m.youtube.com','www.youtube-nocookie.com'].includes(u.hostname)){if(u.searchParams.get('v'))return u.searchParams.get('v');const m=u.pathname.match(/\/(embed|shorts|live)\/([a-zA-Z0-9_-]{11})/);return m?.[2]||'';}}catch{}return '';}
-function renderModal(){const mountEl=document.getElementById('modal');if(!mountEl)return;if(!state.selected){mountEl.innerHTML='';return;}const m=state.selected;const banner=img(m,true),cover=img(m);const official=(m.externalLinks||[]).filter(x=>validURL(x.url)&&/crunchyroll|netflix|hidive|youtube|prime|disney|hulu|tubi|pluto|anime|bilibili|retrocrush|gundam/i.test(x.site||''));const eps=(m.streamingEpisodes||[]).filter(e=>validURL(e.url)).slice(0,30);const trailer=(m.trailer?.site?.toLowerCase()==='youtube'&&m.trailer?.id)||null;const html=`<div class="overlay enter" id="detail-overlay"><div class="scrim" data-action="close-detail"></div><div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(title(m))}"><div class="handle"></div><div class="detail-hero">${banner?`<img src="${esc(banner)}" alt="" />`:''}<button class="detail-close" data-action="close-detail" aria-label="Fechar">${icon('back',23)}</button></div><div class="detail-content"><div class="detail-top">${cover?`<img class="detail-poster" src="${esc(cover)}" alt="" />`:'<div class="detail-poster"></div>'}<div><h1 class="detail-title">${esc(title(m))}</h1><div class="detail-meta">${typeName(m)} · ${m.seasonYear||'Ano indisponível'} · ${m.episodes?`${m.episodes} episódios`:m.format==='MOVIE'?'Longa-metragem':'Episódios a confirmar'}</div><div class="tags">${(m.genres||[]).slice(0,3).map(g=>`<span class="tag">${esc(g)}</span>`).join('')}</div></div></div><div class="detail-actions"><button class="primary" data-action="${trailer?'trailer':'official'}">${icon(trailer?'play':'external',18)} ${trailer?'Ver trailer':'Onde assistir'}</button><button class="soft-button" data-action="save" data-id="${m.id}" aria-label="${isSaved(m.id)?'Remover da':'Adicionar à'} biblioteca">${icon(isSaved(m.id)?'check':'plus',20)}</button></div><p class="detail-desc">${esc(summary(m))}</p>${state.detailLoading?'<div class="spinner"></div>':''}${eps.length?`<section class="section"><div class="sect-head"><h2>Episódios disponíveis nas fontes</h2></div>${eps.map((e,i)=>`<button class="episode" data-action="episode" data-index="${i}">${e.thumbnail?`<img src="${esc(validURL(e.thumbnail))}" alt="" loading="lazy"/>`:'<div style="width:107px;aspect-ratio:16/9;background:var(--soft);border-radius:10px"></div>'}<span><strong>${esc(e.title||'Episódio '+(i+1))}</strong><small>Disponibilizado por ${esc(e.site||'provedor externo')}</small></span>${icon('play',19)}</button>`).join('')}</section>`:''}<section class="section"><div class="sect-head"><h2>Assistir oficialmente</h2></div>${official.length?official.map(x=>`<button class="source" data-action="open-url" data-url="${esc(validURL(x.url))}">${icon('external',20)}<span><strong>${esc(x.site)}</strong><small>Abre o provedor oficial; assinatura pode ser necessária</small></span>${icon('chevron',17)}</button>`).join(''):'<div class="error-info">Nenhum provedor confirmado para este título no catálogo. A disponibilidade pode variar conforme seu país.</div>'}</section><div class="banner-note">O Sun não fornece episódios sem licença nem remove proteções dos serviços. As fontes mostradas são links de terceiros e podem exigir assinatura.</div></div></div></div>`;mountEl.innerHTML=html;}
-async function openDetail(id){const m=state.media.get(String(id))||state.saved[id]?.media||state.history[id]?.media;if(!m)return;state.selected=m;state.detailLoading=true;renderModal();try{const data=await queryGraph(Q_DETAIL,{id:Number(id)});if(!state.selected||String(state.selected.id)!==String(id))return;if(data?.Media){state.selected=remember(data.Media);}}catch{}finally{if(state.selected&&String(state.selected.id)===String(id)){state.detailLoading=false;renderModal();}}}
-function closeDetail(hard=false){if(!state.selected)return;const el=document.getElementById('detail-overlay');state.selected=null;state.detailLoading=false;if(el&&!hard){el.classList.remove('enter');setTimeout(()=>{if(!state.selected)renderModal()},290);}else renderModal();}
-function openURL(raw){const url=validURL(raw);if(!url){notify('Link indisponível');return;}if(location.hostname==='appassets.androidplatform.net'){location.href=url;return;} const win=window.open(url,'_blank','noopener,noreferrer');if(!win)location.href=url;}
-function openOfficial(){const m=state.selected;if(!m)return;const links=(m.externalLinks||[]).filter(x=>validURL(x.url));const priority=links.find(x=>/crunchyroll|youtube|netflix|prime|hidive/i.test(x.site||''))||links[0];if(priority)openURL(priority.url);else notify('Nenhuma fonte oficial informada para este título');}
-function renderPlayer(){const el=document.getElementById('player');if(!el)return;if(!state.player){el.innerHTML='';return;}const p=state.player;const video=p.type==='video'?`<video controls playsinline autoplay src="${esc(p.url)}" id="playingVideo"></video>`:`<iframe src="${esc(p.url)}" referrerpolicy="strict-origin-when-cross-origin" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen title="Vídeo de ${esc(p.name)}"></iframe>`;el.innerHTML=`<div class="player-layer enter"><div class="player-top"><button data-action="close-player" aria-label="Fechar player">${icon('back',24)}</button><strong>${esc(p.name)}</strong><span>${icon('film',19)}</span></div><div class="player-box">${video}</div><div class="player-info"><h2>${esc(p.name)}</h2><p>${p.type==='video'?'Reproduzindo no player do Sun. A compatibilidade de codecs depende do aparelho.':'Reproduzindo pelo player oficial incorporado. Alguns vídeos não permitem incorporação ou têm restrições regionais.'}</p>${p.sourceUrl?`<button class="soft-button" data-action="open-url" data-url="${esc(p.sourceUrl)}">${icon('external',16)} Abrir no YouTube oficial</button>`:''}<div class="banner-note"><strong>Sun Player</strong>Ao sair desta tela, o vídeo é pausado. Suas preferências de catálogo ficam salvas neste aparelho.</div></div><div class="player-bottom"><button class="soft-button" data-action="close-player" style="width:100%">${icon('back',17)} Voltar ao Sun</button></div></div>`;const v=document.getElementById('playingVideo');if(v&&p.media){v.addEventListener('timeupdate',()=>{if(v.duration&&Number.isFinite(v.duration)){const k=String(p.media.id);if(state.history[k]){state.history[k].progress=Math.floor((v.currentTime/v.duration)*100);persist();}}});}}
-function openTrailer(){const m=state.selected;if(!m){return;}const id=m.trailer?.site?.toLowerCase()==='youtube'?m.trailer?.id:null;if(!id||!/^[a-zA-Z0-9_-]{11}$/.test(id)){notify('Este anime não tem trailer incorporável');return;}touchHistory(m);state.player={type:'iframe',url:'https://www.youtube-nocookie.com/embed/'+id+'?autoplay=1&playsinline=1&rel=0',name:title(m)+' · Trailer',media:m};renderPlayer();}
-function openEpisode(i){const m=state.selected;if(!m)return;const ep=(m.streamingEpisodes||[]).filter(e=>validURL(e.url))[i];if(!ep)return;touchHistory(m);const id=youtubeID(ep.url);if(id){state.player={type:'iframe',url:'https://www.youtube-nocookie.com/embed/'+id+'?autoplay=1&playsinline=1',name:ep.title||title(m),media:m};renderPlayer();}else{openURL(ep.url);notify('Abrindo episódio no serviço de origem');}}
-function openOfficialVideo(i){const ep=OFFICIAL_EPISODES[i];if(!ep)return;state.player={type:'iframe',url:'https://www.youtube-nocookie.com/embed/'+ep.id+'?autoplay=1&playsinline=1',sourceUrl:'https://www.youtube.com/watch?v='+ep.id,name:ep.title+' · '+ep.caption};renderPlayer();}
-function openVideo(url,name,media){const safe=validURL(url);if(!safe)return;state.player={type:'video',url:safe,name,media};if(media)touchHistory(media);renderPlayer();}
-function closePlayer(){if(!state.player)return;const el=document.querySelector('.player-layer');if(el){el.classList.remove('enter');el.querySelector('video')?.pause();}state.player=null;setTimeout(()=>renderPlayer(),390);if(fileURL){URL.revokeObjectURL(fileURL);fileURL=null;}}
-function goBack(){if(state.player){closePlayer();return true;}if(state.selected){closeDetail();return true;}if(state.screen!=='home'){goto('home');return true;}return false;}
-window.sunBack=goBack;
-function exportData(){const blob=new Blob([JSON.stringify({version:1,saved:state.saved,history:state.history,theme:state.theme},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='sun-biblioteca.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),3000);notify('Backup exportado');}
-function handleClick(event){const btn=event.target.closest('[data-action]');if(!btn)return;const a=btn.dataset.action;const id=btn.dataset.id;switch(a){case'goto':goto(btn.dataset.screen);break;case'filter':setFilter(btn.dataset.filter);break;case'lib-tab':state.libFilter=btn.dataset.filter;mount();break;case'detail':openDetail(id);break;case'save':toggleSave(id);break;case'close-detail':closeDetail();break;case'trailer':openTrailer();break;case'episode':openEpisode(Number(btn.dataset.index));break;case'official':openOfficial();break;case'open-url':openURL(btn.dataset.url);break;case'close-player':closePlayer();break;case'open-file':document.getElementById('localVideo').click();break;case'demo':openVideo(DEMO_URL,'Big Buck Bunny · vídeo de demonstração');break;case'official-video':openOfficialVideo(Number(btn.dataset.index));break;case'theme':state.theme=state.theme==='light'?'dark':'light';persist();mount();break;case'export':exportData();break;case'import':document.getElementById('importData').click();break;case'reload':state.loaded=false;loadHome(true);notify('Atualizando catálogo…');break;case'retry':doSearch();break;case'clear-search':state.query='';state.searchResults=[];++currentRequest;mount();document.getElementById('searchInput')?.focus();break;}}
-function handleInput(event){if(event.target.id==='searchInput'){state.query=event.target.value;clearTimeout(debounce);debounce=setTimeout(doSearch,450);}}
-document.addEventListener('click',handleClick);
-document.addEventListener('input',handleInput);
-document.getElementById('localVideo').addEventListener('change',event=>{const file=event.target.files?.[0];if(!file)return;if(fileURL)URL.revokeObjectURL(fileURL);fileURL=URL.createObjectURL(file);state.player={type:'video',url:fileURL,name:file.name};renderPlayer();event.target.value='';});
-document.getElementById('importData').addEventListener('change',async event=>{const file=event.target.files?.[0];if(!file)return;try{if(file.size>5e6)throw Error('Arquivo muito grande');const data=JSON.parse(await file.text());if(!data||typeof data!=='object'||!data.saved||!data.history)throw Error('Formato inválido');state.saved=data.saved;state.history=data.history;state.theme=data.theme==='dark'?'dark':'light';persist();mount();notify('Biblioteca restaurada!');}catch{notify('Não foi possível importar esse backup');}event.target.value='';});
-window.addEventListener('keydown',event=>{if(event.key==='Escape'||event.key==='Backspace'&&event.target.tagName!=='INPUT'){if(goBack())event.preventDefault();}});
-window.addEventListener('popstate',()=>goBack());
-if('serviceWorker' in navigator && /^https?:$/.test(location.protocol))navigator.serviceWorker.register('./sw.js').catch(()=>{});
-mount();loadHome();
+function enter(m){if(!m)return;if(!selected)homeScroll=window.scrollY;selected=m;editing=false;detailTab='Episódios';render();window.scrollTo(0,0);}
+app.addEventListener('click',e=>{
+  const b=e.target.closest('[data-action]');if(!b)return;
+  const {action,id,value,index}=b.dataset, m=id?node(id):selected;
+  switch(action){
+    case 'detail':enter(m);return;
+    case 'watch':if(m)launch(m,index===undefined?null:Number(index));return;
+    case 'nav':selected=null;editing=false;tab=value;window.scrollTo(0,0);break;
+    case 'back':back();return;
+    case 'filter':filter=value;heroIndex=0;break;
+    case 'slide':heroIndex=Number(value);break;
+    case 'pane':detailTab=value;editing=false;break;
+    case 'save':if(prefs.saved[id])delete prefs.saved[id];else prefs.saved[id]={media:m,added:Date.now()};persist();break;
+    case 'saved':case 'recent':tab='library';historyTab=action==='recent';break;
+    case 'theme':prefs.theme=prefs.theme==='light'?'dark':'light';persist();break;
+    case 'file':if(videoOrigin)location.href='sun://file';else document.getElementById('localVideo').click();return;
+    case 'link':editing=!editing;detailTab='Episódios';break;
+    case 'import':document.getElementById('importData').click();return;
+    case 'export':if(videoOrigin)location.href='sun://export?data='+encodeURIComponent(JSON.stringify(prefs));return;
+    default:return;
+  }
+  render();if(editing)document.getElementById('source-form')?.scrollIntoView({block:'nearest'});
+});
+app.addEventListener('input',e=>{
+  if(e.target.id!=='search')return;
+  query=e.target.value;results=[];searchFailed=false;discovering=!!query.trim();++searchSerial;clearTimeout(searchTimer);
+  searchTimer=setTimeout(()=>discover(query.trim()),320);
+});
+app.addEventListener('submit',e=>{
+  e.preventDefault();const url=external(document.getElementById('link-url').value.trim()), title=document.getElementById('link-name').value.trim();
+  if(!url || !title){toast('Informe um título e um link HTTPS de vídeo.');return;}
+  const ep={id:'link-'+Date.now(),name:title,streams:[{quality:'Original',url}]};
+  const m=selected||known({id:'personal-'+Date.now(),name:title,kind:'Vídeo'});
+  prefs.sources[m.id]=[...(prefs.sources[m.id]||[]),ep];
+  if(!selected)prefs.saved[m.id]={media:m,added:Date.now()};
+  persist();editing=false;render();if(!selected)launch(m,0);else toast('Episódio vinculado.');
+});
+document.getElementById('importData').addEventListener('change',async e=>{
+  try{const file=e.target.files[0];if(!file)return;if(file.size>5000000)throw Error();const p=JSON.parse(await file.text());
+    if(!p.saved||typeof p.saved!=='object'||!p.history||typeof p.history!=='object')throw Error();
+    prefs={saved:p.saved,history:p.history,sources:p.sources||{},theme:p.theme==='light'?'light':'dark'};persist();render();toast('Biblioteca restaurada.');}
+  catch{toast('Não foi possível restaurar esse arquivo.');}e.target.value='';
+});
+document.getElementById('close-preview').onclick=()=>{document.getElementById('preview').replaceChildren();document.getElementById('web-player').close();};
+document.getElementById('localVideo').onchange=e=>{const file=e.target.files[0];if(!file)return;const v=document.createElement('video');v.src=URL.createObjectURL(file);v.autoplay=true;v.controls=true;document.getElementById('preview').replaceChildren(v);document.getElementById('web-player').showModal();};
+document.addEventListener('keydown',e=>{if(e.key==='Escape')back();});
+async function start(){
+  try {const response=await fetch('./cinema/catalog.json');films=(await response.json()).map(known);}
+  catch{app.innerHTML='<p class="empty">Não foi possível abrir o acervo do Sun.</p>';return;}
+  render();discover();
+}
+start();
 })();
