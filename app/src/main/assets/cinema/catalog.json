@@ -1,0 +1,189 @@
+[
+  {
+    "id": "sol-levante",
+    "name": "Sol Levante",
+    "file": "Sol Levante.webm",
+    "year": 2020,
+    "kind": "Filme",
+    "episode": "Filme completo",
+    "duration": 263,
+    "frame": 49,
+    "creator": "Akira Saitoh · Production I.G · Netflix",
+    "license": "CC BY 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+    "genre": "Fantasia",
+    "desc": "Uma jovem enfrenta um mundo de criaturas e forças da natureza nesta animação japonesa de fantasia. A história é contada por imagens e música.",
+    "source": "https://commons.wikimedia.org/wiki/File:Sol_Levante.webm",
+    "streams": [
+      {
+        "quality": "480p",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/4/44/Sol_Levante.webm/Sol_Levante.webm.480p.vp9.webm"
+      },
+      {
+        "quality": "360p",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/4/44/Sol_Levante.webm/Sol_Levante.webm.360p.vp9.webm"
+      },
+      {
+        "quality": "720p",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/4/44/Sol_Levante.webm/Sol_Levante.webm.720p.vp9.webm"
+      }
+    ],
+    "cover": "./cinema/sol-levante.jpg",
+    "subtitle": ""
+  },
+  {
+    "id": "morevna",
+    "name": "Morevna",
+    "file": "Morevna Episode 3.0.2 (English).webm",
+    "year": 2018,
+    "kind": "Série",
+    "episode": "E3 · Morevna",
+    "duration": 618,
+    "frame": 121,
+    "creator": "Morevna Project",
+    "license": "CC BY-SA 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+    "genre": "Ficção científica",
+    "subtitleLang": "pt-br",
+    "desc": "Marya Morevna e Ivan vivem uma releitura cyberpunk de um conto russo, entre máquinas, estradas e uma guerra. Áudio em inglês.",
+    "source": "https://commons.wikimedia.org/wiki/File:Morevna_Episode_3.0.2_%28English%29.webm",
+    "streams": [
+      {
+        "quality": "480p",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/a/a7/Morevna_Episode_3.0.2_%28English%29.webm/Morevna_Episode_3.0.2_%28English%29.webm.480p.vp9.webm"
+      },
+      {
+        "quality": "360p",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/a/a7/Morevna_Episode_3.0.2_%28English%29.webm/Morevna_Episode_3.0.2_%28English%29.webm.360p.vp9.webm"
+      },
+      {
+        "quality": "720p",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/a/a7/Morevna_Episode_3.0.2_%28English%29.webm/Morevna_Episode_3.0.2_%28English%29.webm.720p.vp9.webm"
+      }
+    ],
+    "cover": "./cinema/morevna.jpg",
+    "subtitle": "morevna-pt-BR.vtt"
+  },
+  {
+    "id": "machine-planet",
+    "name": "Machine Planet",
+    "file": "【自主制作アニメ】マシンプラネット.webm",
+    "year": 2019,
+    "kind": "Filme",
+    "episode": "Curta completo",
+    "duration": 94,
+    "frame": 38,
+    "creator": "メカ魂",
+    "license": "CC BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+    "genre": "Ficção científica",
+    "desc": "Um curta de animação independente do Japão que explora um mundo de máquinas.",
+    "source": "https://commons.wikimedia.org/wiki/File:%E3%80%90%E8%87%AA%E4%B8%BB%E5%88%B6%E4%BD%9C%E3%82%A2%E3%83%8B%E3%83%A1%E3%80%91%E3%83%9E%E3%82%B7%E3%83%B3%E3%83%97%E3%83%A9%E3%83%8D%E3%83%83%E3%83%88.webm",
+    "streams": [
+      {
+        "quality": "480p",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/e/e9/%E3%80%90%E8%87%AA%E4%B8%BB%E5%88%B6%E4%BD%9C%E3%82%A2%E3%83%8B%E3%83%A1%E3%80%91%E3%83%9E%E3%82%B7%E3%83%B3%E3%83%97%E3%83%A9%E3%83%8D%E3%83%83%E3%83%88.webm/%E3%80%90%E8%87%AA%E4%B8%BB%E5%88%B6%E4%BD%9C%E3%82%A2%E3%83%8B%E3%83%A1%E3%80%91%E3%83%9E%E3%82%B7%E3%83%B3%E3%83%97%E3%83%A9%E3%83%8D%E3%83%83%E3%83%88.webm.480p.vp9.webm"
+      },
+      {
+        "quality": "360p",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/e/e9/%E3%80%90%E8%87%AA%E4%B8%BB%E5%88%B6%E4%BD%9C%E3%82%A2%E3%83%8B%E3%83%A1%E3%80%91%E3%83%9E%E3%82%B7%E3%83%B3%E3%83%97%E3%83%A9%E3%83%8D%E3%83%83%E3%83%88.webm/%E3%80%90%E8%87%AA%E4%B8%BB%E5%88%B6%E4%BD%9C%E3%82%A2%E3%83%8B%E3%83%A1%E3%80%91%E3%83%9E%E3%82%B7%E3%83%B3%E3%83%97%E3%83%A9%E3%83%8D%E3%83%83%E3%83%88.webm.360p.vp9.webm"
+      },
+      {
+        "quality": "720p",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/e/e9/%E3%80%90%E8%87%AA%E4%B8%BB%E5%88%B6%E4%BD%9C%E3%82%A2%E3%83%8B%E3%83%A1%E3%80%91%E3%83%9E%E3%82%B7%E3%83%B3%E3%83%97%E3%83%A9%E3%83%8D%E3%83%83%E3%83%88.webm/%E3%80%90%E8%87%AA%E4%B8%BB%E5%88%B6%E4%BD%9C%E3%82%A2%E3%83%8B%E3%83%A1%E3%80%91%E3%83%9E%E3%82%B7%E3%83%B3%E3%83%97%E3%83%A9%E3%83%8D%E3%83%83%E3%83%88.webm.720p.vp9.webm"
+      }
+    ],
+    "cover": "./cinema/machine-planet.jpg",
+    "subtitle": ""
+  },
+  {
+    "id": "ponko",
+    "name": "Tanuki Musume Ponko",
+    "file": "Zokune - Tanuki Musume Ponko (2022) (without audio variant).webm",
+    "year": 2022,
+    "kind": "Filme",
+    "episode": "Curta completo · sem áudio",
+    "duration": 167,
+    "frame": 77,
+    "creator": "zokune (ゾクネ)",
+    "license": "CC BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0/",
+    "genre": "Animação",
+    "desc": "Ponko é a protagonista deste curta japonês de animação 2D. Esta edição foi disponibilizada sem trilha sonora.",
+    "source": "https://commons.wikimedia.org/wiki/File:Zokune_-_Tanuki_Musume_Ponko_%282022%29_%28without_audio_variant%29.webm",
+    "streams": [
+      {
+        "quality": "480p",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/a/a8/Zokune_-_Tanuki_Musume_Ponko_%282022%29_%28without_audio_variant%29.webm/Zokune_-_Tanuki_Musume_Ponko_%282022%29_%28without_audio_variant%29.webm.480p.vp9.webm"
+      },
+      {
+        "quality": "360p",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/a/a8/Zokune_-_Tanuki_Musume_Ponko_%282022%29_%28without_audio_variant%29.webm/Zokune_-_Tanuki_Musume_Ponko_%282022%29_%28without_audio_variant%29.webm.360p.vp9.webm"
+      },
+      {
+        "quality": "720p",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/a/a8/Zokune_-_Tanuki_Musume_Ponko_%282022%29_%28without_audio_variant%29.webm/Zokune_-_Tanuki_Musume_Ponko_%282022%29_%28without_audio_variant%29.webm.720p.vp9.webm"
+      }
+    ],
+    "cover": "./cinema/ponko.jpg",
+    "subtitle": ""
+  },
+  {
+    "id": "namakura",
+    "name": "Namakura Gatana",
+    "file": "Kouichi Jun'ichi - Namakura Gatana (1917) - 4-minute restored version.webm",
+    "year": 1917,
+    "kind": "Filme",
+    "episode": "Curta completo",
+    "duration": 259,
+    "frame": 82,
+    "creator": "Jun’ichi Kōuchi",
+    "license": "Domínio público",
+    "genre": "Comédia",
+    "desc": "Um samurai tenta testar sua espada nova e descobre que fez um péssimo negócio. Um dos primeiros filmes de animação japoneses preservados.",
+    "source": "https://commons.wikimedia.org/wiki/File:Kouichi_Jun%27ichi_-_Namakura_Gatana_%281917%29_-_4-minute_restored_version.webm",
+    "streams": [
+      {
+        "quality": "480p",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/b/bf/Kouichi_Jun%27ichi_-_Namakura_Gatana_%281917%29_-_4-minute_restored_version.webm/Kouichi_Jun%27ichi_-_Namakura_Gatana_%281917%29_-_4-minute_restored_version.webm.480p.vp9.webm"
+      },
+      {
+        "quality": "360p",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/b/bf/Kouichi_Jun%27ichi_-_Namakura_Gatana_%281917%29_-_4-minute_restored_version.webm/Kouichi_Jun%27ichi_-_Namakura_Gatana_%281917%29_-_4-minute_restored_version.webm.360p.vp9.webm"
+      },
+      {
+        "quality": "720p",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/b/bf/Kouichi_Jun%27ichi_-_Namakura_Gatana_%281917%29_-_4-minute_restored_version.webm/Kouichi_Jun%27ichi_-_Namakura_Gatana_%281917%29_-_4-minute_restored_version.webm.720p.vp9.webm"
+      }
+    ],
+    "cover": "./cinema/namakura.jpg",
+    "subtitle": ""
+  },
+  {
+    "id": "golden-flower",
+    "name": "A Flor Dourada",
+    "file": "The Golden Flower (1929).webm",
+    "year": 1929,
+    "kind": "Filme",
+    "episode": "Filme completo",
+    "duration": 1007,
+    "frame": 166,
+    "creator": "Noburō Ōfuji",
+    "license": "Domínio público",
+    "genre": "Animação clássica",
+    "desc": "Uma animação japonesa de 1929 do cineasta Noburō Ōfuji. Título internacional: The Golden Flower.",
+    "source": "https://commons.wikimedia.org/wiki/File:The_Golden_Flower_%281929%29.webm",
+    "streams": [
+      {
+        "quality": "480p",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/0/06/The_Golden_Flower_%281929%29.webm/The_Golden_Flower_%281929%29.webm.480p.vp9.webm"
+      },
+      {
+        "quality": "360p",
+        "url": "https://upload.wikimedia.org/wikipedia/commons/transcoded/0/06/The_Golden_Flower_%281929%29.webm/The_Golden_Flower_%281929%29.webm.360p.vp9.webm"
+      }
+    ],
+    "cover": "./cinema/golden-flower.jpg",
+    "subtitle": ""
+  }
+]
