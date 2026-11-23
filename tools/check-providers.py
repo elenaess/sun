@@ -23,7 +23,7 @@ def addon(base):
     for q in ['','Frieren','Shingeki no Kyojin']:
         extra='/search='+url.quote(q) if q else ''
         ms=get(f"{base}/catalog/{c['type']}/{c['id']}{extra}.json").get('metas') or []
-        print('CATALOG',base,q,len(ms),[x.get('name') for x in ms[:4]],flush=True)
+        print('CATALOG',base,q,len(ms),[(x.get('name'),x.get('id')) for x in ms[:4]],flush=True)
         if not ms or not q:continue
         item=ms[0]
         meta=get(f"{base}/meta/{item['type']}/{url.quote(str(item['id']),safe='')}.json").get('meta') or {}
@@ -31,9 +31,19 @@ def addon(base):
         print('EPISODES',base,q,len(vid),[(v.get('season'),v.get('episode')) for v in vid[:2]],flush=True)
         if vid:
             streams=get(f"{base}/stream/{item['type']}/{url.quote(str(vid[0]['id']),safe='')}.json").get('streams') or []
+            print('SHAPE',list(meta),list(vid[0]),str(vid[0].get('id')),[(s.get('name'),list(s),[sub.get('lang') for sub in s.get('subtitles',[])],list((s.get('behaviorHints') or {}).keys())) for s in streams[:3]],flush=True)
             for s in streams[:2]:
                 if s.get('url'):
                     print('VIDEO',base,q,media(s['url']),flush=True)
+                    u=s['url']
+                    for depth in range(3):
+                        with req.urlopen(req.Request(u,headers={'User-Agent':UA}),timeout=12) as stream:
+                            first=stream.read(4096)
+                            if not first.lstrip().startswith(b'#EXTM3U'):
+                                print('SEGMENT',q,stream.status,stream.headers.get_content_type(),'size>=',len(first),flush=True);break
+                            lines=[l.strip() for l in first.decode(errors='replace').splitlines() if l and not l.startswith('#')]
+                            if not lines:break
+                            u=url.urljoin(stream.geturl(),lines[0])
                     break
 def archive():
     query='mediatype:movies AND (subject:"anime" OR subject:"Japanese animation") AND -access-restricted-item:true AND (format:"MPEG4" OR format:"h.264" OR format:"Matroska" OR format:"WebM")'
