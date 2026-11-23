@@ -1,0 +1,25 @@
+name: Conferir fontes do acervo
+on:
+  workflow_dispatch:
+  push:
+    branches: [sun-native-player]
+    paths: ['catalog/sources.json', 'tools/refresh_catalog.py', '.github/workflows/catalog.yml']
+permissions:
+  contents: write
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      - run: python3 tools/refresh_catalog.py
+      - name: Guardar catálogo verificado
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/src/main/assets/cinema
+          if ! git diff --cached --quiet; then
+            git commit -m 'Atualizar mídias verificadas e capas do catálogo'
+            git push origin "HEAD:$GITHUB_REF_NAME"
+          fi
