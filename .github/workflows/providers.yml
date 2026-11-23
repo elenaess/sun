@@ -1,0 +1,17 @@
+name: Conferir APIs de anime
+on:
+  workflow_dispatch:
+  push:
+    branches: [sun-catalog-api]
+    paths: ['tools/check-providers.py','.github/workflows/providers.yml']
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: python3 tools/check-providers.py | tee -a "$GITHUB_STEP_SUMMARY"
