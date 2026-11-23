@@ -145,9 +145,13 @@ final class SunPlugins {
             throw new java.io.IOException("Tipo inválido");
         if(episode==null || episode.length()>400)throw new java.io.IOException("Episódio inválido");
         int total=installed().size()+1;
+        if(preferred<0 || preferred>=total)
+            throw new java.io.IOException("Provedor desconhecido");
+        // IDs de episódios pertencem ao catálogo do provedor de origem.
+        // Consultar outros provedores com o mesmo ID pode retornar episódio errado.
+        // Os demais provedores continuam disponíveis como fichas próprias na busca.
         ArrayList<Integer> order=new ArrayList<>();
-        if(preferred>=0 && preferred<total) order.add(preferred);
-        for(int i=0;i<total;i++)if(!order.contains(i))order.add(i);
+        order.add(preferred);
         ExecutorService pool=Executors.newFixedThreadPool(Math.min(4,order.size()));
         JSONArray streams=new JSONArray();LinkedHashSet<String> seen=new LinkedHashSet<>();
         try {

@@ -181,7 +181,16 @@ public class PlayerActivity extends Activity {
                 item.setSubtitleConfigurations(Collections.singletonList(sub));
             }
             DefaultHttpDataSource.Factory http=new DefaultHttpDataSource.Factory().setUserAgent(CatalogApi.AGENT)
-                .setConnectTimeoutMs(15000).setReadTimeoutMs(25000);
+                .setConnectTimeoutMs(15000).setReadTimeoutMs(25000)
+                // Caso a fonte entregue uma página ou JSON no lugar de vídeo, recusar imediatamente.
+                // Não interfere com MP4, HLS (.m3u8), MPEG-DASH, MKV ou MIME genérico.
+                .setContentTypePredicate(contentType -> {
+                    if(contentType==null)return true;
+                    String type=contentType.toLowerCase(java.util.Locale.ROOT);
+                    return !type.startsWith("text/html")
+                        && !type.startsWith("application/xhtml+xml")
+                        && !type.startsWith("application/json");
+                });
             // Cabeçalhos expressamente fornecidos pela fonte. Sem cookies, login ou contorno de proteção.
             if(variant!=null){
                 JSONObject offered=variant.optJSONObject("requestHeaders");
@@ -214,13 +223,26 @@ public class PlayerActivity extends Activity {
                     android.util.Log.w("SunPlayback","provider-error "+e.getErrorCodeName()+" "+episodeTag()+" "+safeError(e));
                     if(rendered)position=next.getCurrentPosition();
                     if(local==null && quality+1<streams().length()){quality++;surface.post(()->{if(player==next)startVideo();});}
-                    else error("Não foi possível reproduzir o episódio nas fontes disponíveis ("+failureReason(e)+"). " +
-                        "Isso pode indicar vídeo removido, formato incompatível ou resposta bloqueada pelo servidor. " +
-                        "Use Fonte e qualidade para conferir as opções.");
+                    else error(describePlaybackFailure(e));
                 }
             });
             next.setMediaItem(item.build(),Math.max(0,position));next.prepare();next.setPlayWhenReady(playWhenReady);
         } catch(Exception e){error("O endereço deste vídeo não pôde ser aberto.");}
+    }
+    private String describePlaybackFailure(PlaybackException problem){
+        String reason=failureReason(problem);
+        if(reason.startsWith("HTTP 403"))
+            return "A fonte recusou o vídeo (HTTP 403). Não é necessariamente problema da sua internet. " +
+                   "Esta versão não contorna restrições do servidor. Teste outra fonte autorizada.";
+        if(reason.startsWith("HTTP 404") || reason.startsWith("HTTP 410"))
+            return "A fonte informou que o vídeo não existe mais ("+reason+"). Selecione outra fonte disponível.";
+        if(problem.errorCode==PlaybackException.ERROR_CODE_IO_INVALID_HTTP_CONTENT_TYPE)
+            return "O endereço devolveu uma página ou JSON, não um vídeo. " +
+                   "Esse episódio aparece no catálogo, mas a fonte não disponibilizou mídia reproduzível.";
+        if(problem.errorCode==PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED)
+            return "A fonte entregou conteúdo que o player não reconheceu como vídeo. " +
+                   "Confira outra opção em Fonte e qualidade. O vídeo pode estar ausente ou ser incompatível.";
+        return "Fonte indisponível ("+reason+"). Confira outra fonte ou teste um vídeo local em Meus vídeos.";
     }
     private String failureReason(PlaybackException error){
         Throwable cause=error;
