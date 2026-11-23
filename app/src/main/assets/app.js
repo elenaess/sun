@@ -6,6 +6,8 @@ const videoOrigin = location.hostname === 'appassets.androidplatform.net';
 const catalog = new Map();
 let films = [], trending = [], results = [], heroIndex = 0, tab = 'home', filter = 'Início';
 let selected = null, detailTab = 'Episódios', query = '', searchSerial = 0, searchTimer, toastTimer, editing = false;
+const feed = {popular:[],latest:[],dub:[],films:[]}, more = {}, pageOffsets = {};
+let loadingFeed=true, feedError=false, remoteSearch=[], searchOffset=0, canSearchMore=false, searchProviderError=false, browseKey='popular', season='1', episodePage=0, detailError=false, loadingSeries=false;
 let discovering = false, searchFailed = false, historyTab = false, homeScroll = 0;
 const defaults = {saved:{},history:{},sources:{},theme:'dark'};
 let prefs;
@@ -14,10 +16,10 @@ const name = m => m.name || m.title?.english || m.title?.romaji || 'Sem título'
 const format = m => m.kind || (m.format === 'MOVIE' ? 'Filme' : 'Série');
 const year = m => m.year || m.seasonYear || '';
 const external = value => {try {const u = new URL(value);return u.protocol === 'https:' ? u.href : '';} catch {return '';}};
-const cover = m => films.find(f => f.id === m.id)?.cover || external(m.bannerImage) || external(m.coverImage?.large);
+const cover = (m,wide=false) => films.find(f => f.id === m.id)?.cover || (wide && external(m.bannerImage)) || external(m.coverImage?.large) || external(m.bannerImage);
 const subtitle = m => [m.genre || m.genres?.[0],year(m)].filter(Boolean).join(' · ');
 const node = (id) => catalog.get(String(id)) || prefs.saved[id]?.media || prefs.history[id]?.media;
-const art = m => cover(m) ? `<img class="art" src="${esc(cover(m))}" alt="" loading="lazy">` : '<span class="art blank"></span>';
+const art = (m,wide=false) => cover(m,wide) ? `<img class="art" src="${esc(cover(m,wide))}" alt="" loading="lazy">` : '<span class="art blank"></span>';
 const btn = (action,label,symbol,attrs='') => `<button data-action="${action}" aria-label="${esc(label)}" title="${esc(label)}" ${attrs}>${icon(symbol,22)}</button>`;
 const persist = () => localStorage.setItem(KEY,JSON.stringify(prefs));
 function toast(message) {
@@ -25,18 +27,48 @@ function toast(message) {
   clearTimeout(toastTimer);toastTimer=setTimeout(()=>out.classList.remove('shown'),2600);
 }
 function tracks(m) {
+  if(m.provider==='fhd')return m.providerEpisodes||[];
   const original = films.find(f=>f.id===m.id);
   const eps = original ? [{id:'main',name:original.episode,streams:original.streams,subtitle:original.subtitle}] : [];
   const extras = Array.isArray(prefs.sources[m.id]) ? prefs.sources[m.id] : [];
   return eps.concat(extras.filter(e=>e && external(e.streams?.[0]?.url)));
 }
-function playable(m){return tracks(m).length>0;}
-function known(m){catalog.set(String(m.id),m);return m;}
+function playable(m){return m.provider==='fhd'||tracks(m).length>0;}
+function known(m){
+  const old=catalog.get(String(m.id));
+  if(old?.providerEpisodes&&!m.providerEpisodes)return old;
+  catalog.set(String(m.id),m);return m;
+}
+function compact(m){const {providerEpisodes,...record}=m;return record;}
+const feedNames={popular:'Populares',latest:'Lançamentos',dub:'Dublados',films:'Filmes'};
+function showGrid(items){return '<div class="grid">'+items.map(m=>card(m)).join('')+'</div>';}
+async function fetchFeed(key,append=false){
+  const offset=append?(pageOffsets[key]||0):0;
+  const rows=(await AnimeProvider.catalog(key,'',offset)).map(known);
+  const existing=append?feed[key]:[], ids=new Set(existing.map(m=>m.id));
+  const fresh=rows.filter(m=>!ids.has(m.id));
+  feed[key]=existing.concat(fresh);pageOffsets[key]=offset+rows.length;
+  more[key]=rows.length>0&&fresh.length>0;
+}
+async function loadFeeds(){
+  const state=await Promise.allSettled(Object.keys(feed).map(k=>fetchFeed(k)));
+  loadingFeed=false;feedError=state.every(r=>r.status==='rejected');
+  if(!selected&&['home','browse'].includes(tab))render();
+}
+function browse(){
+  return `<h1>Biblioteca de animes</h1><div class="filters">${Object.entries(feedNames).map(([k,label])=>`<button data-action="collection" data-value="${k}" class="${k===browseKey?'active':''}">${label}</button>`).join('')}</div>
+      ${showGrid(feed[browseKey])}${more[browseKey]?'<button class="row" data-action="next-page">Carregar mais títulos</button>':''}
+      ${feedError||!feed[browseKey].length?'<button class="text-btn" data-action="reload-feed">Atualizar catálogo</button>':''}`;
+}
+function feedRail(label,key){
+  if(!feed[key].length)return '';
+  return `<section><h2><button class="collection-link" data-action="collection" data-value="${key}">${label}<span>→</span></button></h2><div class="rail">${feed[key].slice(0,12).map(m=>card(m)).join('')}</div></section>`;
+}
 function card(m,wide=false,continuing=false) {
   const hist=prefs.history[m.id], ep=hist?.episodes?.[hist.lastEpisode];
   const progress=ep?.duration?Math.min(100,Math.round(100*ep.position/ep.duration)):0;
-  return `<button class="card ${wide?'wide':''}" data-action="${continuing?'watch':'detail'}" data-id="${esc(m.id)}">
-    <span class="picture">${art(m)}${wide?`<i class="playover">${icon('play',18)}</i>`:''}</span>
+  return `<button class="card ${wide?'wide':''}" aria-label="${esc((continuing?'Continuar ':'Abrir ')+name(m))}" data-action="${continuing?'watch':'detail'}" data-id="${esc(m.id)}">
+    <span class="picture">${art(m,wide)}${wide?`<i class="playover">${icon('play',18)}</i>`:''}</span>
     <strong>${esc(name(m))}</strong><small>${esc(continuing && ep?.position ? Math.max(1,Math.ceil((ep.duration-ep.position)/60000))+' min restantes' : subtitle(m) || format(m))}</small>
     ${continuing?`<span class="track"><i style="width:${progress}%"></i></span>`:''}</button>`;
 }
@@ -53,26 +85,32 @@ function recent() {
   return Object.values(prefs.history).sort((a,b)=>b.last-a.last).map(h=>h.media && (node(h.media.id)||h.media)).filter(Boolean);
 }
 function home(){
-  const pool=filtered(films);
+  const selector=filter==='Filmes'?'films':filter==='Animes'?'latest':'popular';
+  if(loadingFeed && !feed[selector].length)return '<p class="muted">Carregando a biblioteca de animes…</p><button class="row" data-action="nav" data-value="search">Buscar anime</button>';
+  const featured=feed[selector].slice(0,5),pool=featured.length?featured:filtered(films);
   if(!pool.length)return '<p class="muted">Carregando o acervo…</p>';
   const i=heroIndex%pool.length,m=pool[i];
   const ongoing=recent().filter(m=>{const h=prefs.history[m.id];return playable(m)&&!h?.episodes?.[h.lastEpisode]?.ended;});
   return `<div class="filters">${['Início','Animes','Séries','Filmes'].map(f=>`<button class="${f===filter?'active':''}" data-action="filter" data-value="${f}">${f}</button>`).join('')}</div>
-    <article class="hero">${art(m)}<div class="shade"></div><button class="hero-info" data-action="detail" data-id="${m.id}"><span>${esc(format(m))} · ${year(m)}</span><h1>${esc(name(m))}</h1><small>${esc(m.genre)} · ${Math.ceil(m.duration/60)} min</small></button>
+    <article class="hero">${art(m,true)}<div class="shade"></div><button class="hero-info" data-action="detail" data-id="${m.id}"><span>${esc(format(m))} · ${year(m)}</span><h1>${esc(name(m))}</h1><small>${esc(m.genre)} ${m.duration?' · '+Math.ceil(m.duration/60)+' min':''}</small></button>
     ${btn('watch','Assistir '+name(m),'play',`class="hero-play" data-id="${m.id}"`)}</article>
     <div class="dots">${pool.map((f,n)=>`<button aria-label="Destaque ${esc(name(f))}" class="${n===i?'current':''}" data-action="slide" data-value="${n}"></button>`).join('')}</div>
     ${rail('Continuar assistindo',ongoing,true,true)}
-    ${rail('Assistir no Sun',pool,true)}
-    ${rail('Em alta no AniList',filtered(trending).slice(0,12))}
+    <button class="catalog-entry" data-action="collection" data-value="popular">Biblioteca de animes <span>Explorar tudo →</span></button>
+    ${feedError?'<button class="row" data-action="reload-feed">Catálogo online indisponível · tentar novamente</button>':''}
+    ${feedRail('Animes populares','popular')}${feedRail('Lançamentos','latest')}${feedRail('Dublados em português','dub')}${feedRail('Filmes','films')}${rail('Cinema aberto',filtered(films),true)}
     ${filter==='Início'||filter==='Animes'?rail('Clássicos japoneses',films.filter(f=>f.year<1950)):''}`;
 }
 function search(){
   const local=films.filter(f=>name(f).toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
   const remote=query.trim()?results:trending;
-  return `<h1>Buscar</h1><label class="searchbox">${icon('search')}<input autocomplete="off" id="search" type="search" placeholder="Anime, série ou filme" value="${esc(query)}"></label>
-    ${local.length?`<h2>Assistir no Sun</h2><div class="grid">${local.map(m=>card(m)).join('')}</div>`:''}
+  return `<h1>Buscar</h1><label class="searchbox">${icon('search')}<input autocomplete="off" id="search" aria-label="Pesquisar anime" type="search" placeholder="Anime, série ou filme" value="${esc(query)}"></label>
+    ${remoteSearch.length&&query.trim()?`<h2>Episódios no Sun</h2>${showGrid(remoteSearch)}${canSearchMore?'<button class="row" data-action="search-more">Mais resultados</button>':''}`:''}
+    ${!query.trim()?feedRail('Explorar a biblioteca','popular'):''}
+    ${searchProviderError?'<p class="muted">A busca de episódios está indisponível. Tente novamente.</p>':''}
+    ${local.length?`<h2>Cinema aberto</h2><div class="grid">${local.map(m=>card(m)).join('')}</div>`:''}
     ${remote.length?`<h2>${query?'No catálogo AniList':'Em alta no AniList'}</h2><div class="grid">${remote.map(m=>card(m)).join('')}</div>`:''}
-    ${discovering?'<p class="muted">Buscando no AniList…</p>':searchFailed?'<p class="muted">O AniList está indisponível agora.</p>':query&&!local.length&&!remote.length?'<p class="muted">Nenhum título encontrado.</p>':''}`;
+    ${discovering?'<p class="muted">Buscando no AniList…</p>':searchFailed?'<p class="muted">O AniList está indisponível agora.</p>':query&&!remoteSearch.length&&!local.length&&!remote.length?'<p class="muted">Nenhum título encontrado.</p>':''}`;
 }
 function library(){
   const items=historyTab?recent():Object.values(prefs.saved).map(a=>a.media&&(node(a.media.id)||a.media)).filter(Boolean);
@@ -84,13 +122,13 @@ function toolsPage(){
     <button class="row" data-action="link">${icon('plus')} Abrir link de vídeo</button>${editing?sourceForm(false):''}`;
 }
 function profile(){
-  return `<h1>Perfil</h1><div class="identity"><img src="./cinema/morevna.jpg" alt=""><div><strong>Meu perfil</strong><small>Sun 0.2.0</small></div></div>
+  return `<h1>Perfil</h1><div class="identity"><img src="./cinema/morevna.jpg" alt=""><div><strong>Meu perfil</strong><small>Sun 0.3.0</small></div></div>
     <button class="row" data-action="theme">${icon('moon')} Tema ${prefs.theme==='light'?'claro':'escuro'}</button>
     <button class="row" data-action="export">${icon('download')} Exportar biblioteca</button>
     <button class="row" data-action="import">${icon('upload')} Importar biblioteca</button>
     <h2>Extras oficiais</h2>${OFFICIAL_EPISODES.map(v=>`<a class="row" href="https://www.youtube.com/watch?v=${v.id}">${esc(v.title)} ${icon('external',16)}</a>`).join('')}`;
 }
-const screens={home,search,library,videos:toolsPage,profile};
+const screens={home,search,browse,library,videos:toolsPage,profile};
 function nav(){
   return `<nav aria-label="Navegação principal">${[['home','Início','home'],['search','Buscar','search'],['videos','Meus vídeos','tv'],['library','Biblioteca','library'],['profile','Perfil','user']].map(([k,label,ic])=>
     `<button data-action="nav" data-value="${k}" aria-label="${label}" title="${label}" class="${tab===k?'here':''}">${k==='profile'?'<img class="avatar" src="./cinema/morevna.jpg" alt="">':icon(ic)}<span>${label}</span></button>`).join('')}</nav>`;
@@ -102,14 +140,21 @@ function detail(m){
   const eps=tracks(m), saved=!!prefs.saved[m.id], history=prefs.history[m.id];
   const source=external(m.source), license=external(m.licenseUrl);
   const links=(Array.isArray(m.externalLinks)?m.externalLinks:[]).filter(l=>external(l.url)&&l.type==='STREAMING').slice(0,5);
-  const shorts=films.filter(f=>f.id!==m.id).slice(0,4);
-  return `<article class="detail"><div class="detail-art">${art(m)}<div class="shade"></div>${btn('back','Voltar','back','class="round back"')}</div>
+  const isOnline=m.provider==='fhd';
+  const seasons=[...new Set(eps.map(e=>String(e.season??1)))];
+  if(!seasons.includes(season))season=seasons[0]||'1';
+  const group=eps.map((e,i)=>({e,i})).filter(v=>!isOnline||String(v.e.season??1)===season);
+  const per=30,visible=group.slice(episodePage*per,(episodePage+1)*per);
+  const seasonNav=isOnline&&seasons.length>1?`<label class="season">Temporada <select data-role="season">${seasons.map(n=>`<option value="${esc(n)}" ${n===season?'selected':''}>${esc(n)}</option>`).join('')}</select></label>`:'';
+  const pager=group.length>per?`<div class="page-buttons"><button data-action="ep-prev" ${episodePage===0?'disabled':''}>← Anterior</button><span>${episodePage+1} / ${Math.ceil(group.length/per)}</span><button data-action="ep-next" ${(episodePage+1)*per>=group.length?'disabled':''}>Próxima →</button></div>`:'';
+  const shorts=(isOnline?feed.popular:films).filter(f=>f.id!==m.id).slice(0,4);
+  return `<article class="detail"><div class="detail-art">${art(m,true)}<div class="shade"></div>${btn('back','Voltar','back','class="round back"')}</div>
     <div class="detail-body"><div class="detail-heading"><div class="poster">${art(m)}</div><div><h1>${esc(name(m))}</h1><div class="tags"><b>${esc(format(m))}</b>${year(m)?`<span>${year(m)}</span>`:''}</div></div></div>
-    <div class="actions">${eps.length?`<button class="cta" data-action="watch" data-id="${esc(m.id)}">${icon('play',19)} ${history?.episodes?.[history.lastEpisode]?.position?'Continuar':'Assistir'}</button>`:`<button class="cta secondary" data-action="link">${icon('plus',18)} Vincular episódio</button>`}${btn('save',saved?'Remover da lista':'Salvar na lista',saved?'check':'library',`class="round save" data-id="${esc(m.id)}"`)}</div>
+    <div class="actions">${eps.length?`<button class="cta" data-action="watch" data-id="${esc(m.id)}">${icon('play',19)} ${history?.episodes?.[history.lastEpisode]?.position?'Continuar':'Assistir'}</button>`:`<button class="cta secondary" data-action="${isOnline?'retry-detail':'link'}">${isOnline?(loadingSeries?'Carregando episódios…':'Atualizar episódios'):icon('plus',18)+' Vincular episódio'}</button>`}${btn('save',saved?'Remover da lista':'Salvar na lista',saved?'check':'library',`class="round save" data-id="${esc(m.id)}"`)}</div>
     <p class="desc">${esc((m.desc||m.description||'').replace(/<[^>]*>/g,'').slice(0,420))}</p>
     <div class="tabs">${['Episódios','Detalhes','Relacionados'].map(t=>`<button data-action="pane" data-value="${t}" class="${t===detailTab?'selected':''}">${t}</button>`).join('')}</div>
-    ${detailTab==='Episódios'?`${eps.map((e,i)=>`<button class="episode" data-action="watch" data-id="${esc(m.id)}" data-index="${i}"><span class="thumb">${art(m)}</span><span><strong>${esc(e.name)}</strong><small>${m.duration?Math.ceil(m.duration/60)+' min': 'Fonte de vídeo'}</small></span><i>${icon('play',16)}</i></button>`).join('')}
-      ${eps.length?'<button class="text-btn" data-action="link">+ Vincular outro episódio</button>':'<p class="muted">Este título tem ficha no AniList. Para assistir no Sun, vincule um link direto de vídeo.</p>'}${editing?sourceForm(true):''}`:
+    ${detailTab==='Episódios'?`${seasonNav}${visible.map(({e,i})=>`<button class="episode" aria-label="Assistir episódio ${esc(String(e.number??i+1))}" data-action="watch" data-id="${esc(m.id)}" data-index="${i}"><span class="thumb">${external(e.cover)?`<img class="art" src="${esc(external(e.cover))}" loading="lazy" alt="">`:art(m)}</span><span><strong>${esc(e.name)}</strong><small>${m.duration?Math.ceil(m.duration/60)+' min': 'Fonte de vídeo'}</small></span><i>${icon('play',16)}</i></button>`).join('')}
+      ${pager}${isOnline?(detailError?'<button class="row" data-action="retry-detail">Falha ao carregar · Tentar novamente</button>':!eps.length&&!loadingSeries?'<p class="muted">O provedor ainda não publicou episódios para esta ficha.</p>':''):eps.length?'<button class="text-btn" data-action="link">+ Vincular outro episódio</button>':'<p class="muted">Este título tem ficha no AniList. Para assistir no Sun, vincule um link direto de vídeo.</p>'}${editing?sourceForm(true):''}`:
       detailTab==='Detalhes'?`<h2>Sobre o título</h2><p>${esc(subtitle(m))}</p>${m.creator?`<p>${esc(m.creator)} · ${esc(m.license)}</p>`:''}
        ${source?`<a class="row" href="${esc(source)}">Ficha da fonte ${icon('external',16)}</a>`:''}${license?`<a class="row" href="${esc(license)}">Licença da obra ${icon('external',16)}</a>`:''}
        ${m.trailer?.site?.toLowerCase()==='youtube'&&/^[\w-]{11}$/.test(m.trailer.id)?`<a class="row" href="https://www.youtube.com/watch?v=${esc(m.trailer.id)}">Trailer no YouTube</a>`:''}
@@ -134,13 +179,30 @@ app.addEventListener('touchend',e=>{
   const delta=e.changedTouches[0].clientX-swipeStart;
   swipeStart=null;
   if(Math.abs(delta)<55)return;
-  const count=filtered(films).length;heroIndex=(heroIndex+(delta<0?1:-1)+count)%count;render();
+  const kind=filter==='Filmes'?'films':filter==='Animes'?'latest':'popular';
+  const count=Math.min(5,feed[kind].length)||filtered(films).length;if(!count)return;heroIndex=(heroIndex+(delta<0?1:-1)+count)%count;render();
 },{passive:true});
 const fields='id title {romaji english} format seasonYear genres description(asHtml:false) coverImage {large} bannerImage trailer {id site} externalLinks {site url type}';
+function updateSearch(){
+  if(selected||tab!=='search')return;
+  const active=document.activeElement, focused=active?.id==='search', caret=focused?active.selectionStart:0;
+  render();
+  if(focused){const input=document.getElementById('search');input.focus({preventScroll:true});input.setSelectionRange(caret,caret);}
+}
 async function discover(term=''){
   const seq=++searchSerial;
   const ctrl=new AbortController(), timer=setTimeout(()=>ctrl.abort(),10000);
   try {
+    if(term){
+      try {
+        const group=await Promise.allSettled([AnimeProvider.catalog('popular',term),AnimeProvider.catalog('films',term)]);
+        if(seq!==searchSerial)return;
+        const primary=group[0].value||[];searchOffset=primary.length;canSearchMore=primary.length>=50;
+        remoteSearch=[...new Map(group.flatMap(r=>r.value||[]).map(m=>[m.id,known(m)])).values()];
+        searchProviderError=group.every(r=>r.status==='rejected');
+        updateSearch();
+      }catch{if(seq===searchSerial)searchProviderError=true;}
+    }
     const q='query($search:String,$sort:[MediaSort]){Page(perPage:15){media(type:ANIME,isAdult:false,search:$search,sort:$sort){'+fields+'}}}';
     const r=await fetch('https://graphql.anilist.co',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:q,variables:{search:term||null,sort:[term?'SEARCH_MATCH':'TRENDING_DESC']}}),signal:ctrl.signal});
     if(!r.ok)throw Error(r.status);const data=await r.json();
@@ -148,37 +210,60 @@ async function discover(term=''){
     if(term)results=rows;else trending=rows;searchFailed=false;
   }catch{if(seq===searchSerial)searchFailed=true;}finally{
     clearTimeout(timer);
-    if(seq===searchSerial){discovering=false;if(!selected&&(tab==='home'||tab==='search')){const focus=document.activeElement?.id==='search';const caret=focus?document.activeElement.selectionStart:0;render();if(focus){const input=document.getElementById('search');input.focus();input.setSelectionRange(caret,caret);}}}
+    if(seq===searchSerial){discovering=false;updateSearch();}
   }
 }
-function launch(m,index){
+async function launch(m,index){
+  if(m.provider==='fhd'&&!m.providerEpisodes){
+    try{m=known(await AnimeProvider.detail(m));}catch{enter(m);return;}
+  }
   const eps=tracks(m);
   if(!eps.length){selected=m;detailTab='Episódios';render();return;}
   const h=prefs.history[m.id]||{}, last=eps.findIndex(e=>e.id===h.lastEpisode);
   const chosen=Number.isInteger(index)?index:Math.max(0,last);
-  const data={id:String(m.id),title:name(m),series:format(m)==='Série',credit:[m.creator,m.license].filter(Boolean).join(' · '),index:chosen,
-    episodes:eps.map(e=>({...e,position:h.episodes?.[e.id]?.position||0}))};
+  const windowStart=m.provider==='fhd'?Math.floor(chosen/30)*30:0;
+  const queue=m.provider==='fhd'?eps.slice(windowStart,windowStart+30):eps;
+  const data={provider:m.provider||'',mediaType:m.type||'',id:String(m.id),title:name(m),series:format(m)==='Série',credit:[m.creator,m.license].filter(Boolean).join(' · '),index:chosen-windowStart,
+    episodes:queue.map(e=>({id:e.id,name:e.name,streams:e.streams,subtitle:e.subtitle,position:h.episodes?.[e.id]?.position||0}))};
   if(videoOrigin)location.href='sun://play?data='+encodeURIComponent(JSON.stringify(data));
-  else {const video=document.createElement('video');video.controls=true;video.autoplay=true;video.src=eps[chosen].streams[0].url;document.getElementById('preview').replaceChildren(video);document.getElementById('web-player').showModal();}
+  else {let streams=eps[chosen].streams;if(m.provider==='fhd'){try{streams=(await AnimeProvider.stream(m,eps[chosen])).streams;}catch{streams=[];}}
+    const url=external(streams?.[0]?.url);if(!url){toast('Fonte indisponível.');return;}
+    const video=document.createElement('video');video.controls=true;video.autoplay=true;video.src=url;document.getElementById('preview').replaceChildren(video);document.getElementById('web-player').showModal();}
 }
 window.sunProgress=raw=>{
   const p=JSON.parse(raw),m=node(p.id);if(!m)return;
   const old=prefs.history[p.id]||{};
-  prefs.history[p.id]={...old,media:m,last:Date.now(),lastEpisode:p.last,episodes:{...old.episodes,...p.episodes}};persist();render();
+  prefs.history[p.id]={...old,media:compact(m),last:Date.now(),lastEpisode:p.last,episodes:{...old.episodes,...p.episodes}};persist();render();
 };
-function enter(m){if(!m)return;if(!selected)homeScroll=window.scrollY;selected=m;editing=false;detailTab='Episódios';render();window.scrollTo(0,0);}
+async function enter(m){
+  if(!m)return;if(!selected)homeScroll=window.scrollY;
+  selected=m;editing=false;detailTab='Episódios';season='1';episodePage=0;detailError=false;
+  loadingSeries=m.provider==='fhd'&&!m.providerEpisodes;render();window.scrollTo(0,0);
+  if(!loadingSeries)return;
+  try{const full=known(await AnimeProvider.detail(m));if(selected?.id===m.id)selected=full;}
+  catch{if(selected?.id===m.id)detailError=true;}
+  finally{if(selected?.id===m.id){loadingSeries=false;render();}}
+}
 app.addEventListener('click',e=>{
   const b=e.target.closest('[data-action]');if(!b)return;
   const {action,id,value,index}=b.dataset, m=id?node(id):selected;
   switch(action){
-    case 'detail':enter(m);return;
+    case 'detail': case 'retry-detail':enter(m);return;
+    case 'reload-feed':loadFeeds();return;
+    case 'collection':browseKey=value;tab='browse';window.scrollTo(0,0);break;
+    case 'next-page':b.disabled=true;fetchFeed(browseKey,true).then(render).catch(()=>{b.disabled=false;toast('Falha ao buscar mais títulos.');});return;
+    case 'search-more':{const target=query.trim();b.disabled=true;AnimeProvider.catalog('popular',target,searchOffset).then(rows=>{
+      if(target!==query.trim())return;const ids=new Set(remoteSearch.map(f=>f.id));const fresh=rows.filter(f=>!ids.has(f.id)).map(known);remoteSearch.push(...fresh);searchOffset+=rows.length;canSearchMore=rows.length>=50&&!!fresh.length;render();
+    }).catch(()=>{b.disabled=false;toast('Não foi possível carregar a próxima página.');});return;}
+    case 'ep-next':episodePage++;break;
+    case 'ep-prev':episodePage=Math.max(0,episodePage-1);break;
     case 'watch':if(m)launch(m,index===undefined?null:Number(index));return;
     case 'nav':selected=null;editing=false;tab=value;window.scrollTo(0,0);break;
     case 'back':back();return;
     case 'filter':filter=value;heroIndex=0;break;
     case 'slide':heroIndex=Number(value);break;
     case 'pane':detailTab=value;editing=false;break;
-    case 'save':if(prefs.saved[id])delete prefs.saved[id];else prefs.saved[id]={media:m,added:Date.now()};persist();break;
+    case 'save':if(prefs.saved[id])delete prefs.saved[id];else prefs.saved[id]={media:compact(m),added:Date.now()};persist();break;
     case 'saved':case 'recent':tab='library';historyTab=action==='recent';break;
     case 'theme':prefs.theme=prefs.theme==='light'?'dark':'light';persist();break;
     case 'file':if(videoOrigin)location.href='sun://file';else document.getElementById('localVideo').click();return;
@@ -189,9 +274,10 @@ app.addEventListener('click',e=>{
   }
   render();if(editing)document.getElementById('source-form')?.scrollIntoView({block:'nearest'});
 });
+app.addEventListener('change',e=>{if(e.target.dataset.role==='season'){season=e.target.value;episodePage=0;render();}});
 app.addEventListener('input',e=>{
   if(e.target.id!=='search')return;
-  query=e.target.value;results=[];searchFailed=false;discovering=!!query.trim();++searchSerial;clearTimeout(searchTimer);
+  query=e.target.value;results=[];remoteSearch=[];searchProviderError=false;canSearchMore=false;searchFailed=false;discovering=!!query.trim();++searchSerial;clearTimeout(searchTimer);
   searchTimer=setTimeout(()=>discover(query.trim()),320);
 });
 app.addEventListener('submit',e=>{
@@ -200,7 +286,7 @@ app.addEventListener('submit',e=>{
   const ep={id:'link-'+Date.now(),name:title,streams:[{quality:'Original',url}]};
   const m=selected||known({id:'personal-'+Date.now(),name:title,kind:'Vídeo'});
   prefs.sources[m.id]=[...(prefs.sources[m.id]||[]),ep];
-  if(!selected)prefs.saved[m.id]={media:m,added:Date.now()};
+  if(!selected)prefs.saved[m.id]={media:compact(m),added:Date.now()};
   persist();editing=false;render();if(!selected)launch(m,0);else toast('Episódio vinculado.');
 });
 document.getElementById('importData').addEventListener('change',async e=>{
@@ -215,7 +301,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')back();});
 async function start(){
   try {const response=await fetch('./cinema/catalog.json');films=(await response.json()).map(known);}
   catch{app.innerHTML='<p class="empty">Não foi possível abrir o acervo do Sun.</p>';return;}
-  render();discover();
+  render();loadFeeds();discover();
 }
 start();
 })();

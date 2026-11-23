@@ -1,5 +1,5 @@
-const CACHE = 'sun-shell-v0.2.0';
-const ASSETS = ['./', './index.html','./styles.css','./app.js','./icons.js','./symbol.png','./cinema/catalog.json','./icon-192.png','./icon-512.png','./manifest.webmanifest'];
+const CACHE = 'sun-shell-v0.3.0';
+const ASSETS = ['./', './index.html','./styles.css','./app.js','./icons.js','./provider.js','./symbol.png','./cinema/catalog.json','./icon-192.png','./icon-512.png','./manifest.webmanifest'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS)).then(() => self.skipWaiting()));
 });

@@ -1,17 +1,19 @@
 # Sun para Android
 
-O Sun reproduz vídeos no próprio aplicativo com o AndroidX Media3. Requer Android 8.0 ou superior.
+O Sun tem uma biblioteca online de animes em português e um player nativo com AndroidX Media3. Requer Android 8.0 ou superior.
 
-## Assistir
+## Biblioteca e reprodução
 
-Escolha um dos seis títulos de **Assistir no Sun**. A lista inclui *Sol Levante*, *Morevna* (episódio 3, com legenda em português brasileiro), *Machine Planet*, *Tanuki Musume Ponko* (edição sem áudio), *Namakura Gatana* e *A Flor Dourada*. O aplicativo começa em 480p quando disponível e permite trocar a qualidade. O progresso fica no aparelho.
+Abra **Buscar**, digite um título e escolha um resultado em **Episódios no Sun**. Toque em **Assistir** para começar ou selecione um episódio na ficha. A tela inicial traz populares, lançamentos, dublados e filmes. Use **Biblioteca de animes** para explorar as páginas do catálogo.
 
-Os arquivos de vídeo vêm do Wikimedia Commons. A ficha de cada obra informa a autoria, a licença e a fonte. As capas são quadros das respectivas obras. O catálogo e as capas acompanham o APK. A reprodução pela internet depende da conexão com a fonte.
+O catálogo consulta o [add-on público AnimesFHD](https://animesfhd.net/stremio/manifest.json) pelo protocolo Stremio. Títulos, temporadas, episódios e fontes vêm do provedor. Alguns arcos e temporadas têm fichas separadas. O APK resolve o endereço de vídeo quando você dá play. A disponibilidade e o idioma variam por episódio. O Sun não exige conta ou assinatura.
 
-**Buscar** também pesquisa fichas no AniList. Use **Vincular episódio** para associar uma fonte HTTPS de vídeo a uma ficha. **Meus vídeos** abre arquivos do aparelho e links diretos MP4, WebM ou HLS. O perfil permite exportar e restaurar a biblioteca.
+O player permite avançar ou voltar dez segundos, usar tela cheia e retomar do ponto salvo no aparelho. Trilhas de áudio, legendas e qualidades dependem da fonte. **Cinema aberto** é uma coleção adicional do Wikimedia Commons, com autoria e licença na ficha. **Meus vídeos** abre arquivos do aparelho e links diretos. O perfil permite exportar e restaurar sua biblioteca.
+
+**No catálogo AniList** mostra resultados de descoberta. É possível associar um link próprio a essas fichas.
 
 ## APK
 
-Abra [Releases](https://github.com/elenaess/sun/releases) e baixe o arquivo APK da versão desejada. As versões de teste usam assinatura de depuração. Se uma atualização apresentar conflito de assinatura, exporte a biblioteca antes de remover a versão anterior.
+Baixe o arquivo APK em [Releases](https://github.com/elenaess/sun/releases). As compilações de teste usam assinatura de depuração. Se uma atualização apresentar conflito de assinatura, exporte sua biblioteca antes de remover a versão anterior.
 
-Cada envio à branch principal aciona o [GitHub Actions](https://github.com/elenaess/sun/actions/workflows/android.yml). A compilação verifica a reprodução em emulador, confere a assinatura e publica a primeira compilação de cada versão em Releases.
+O [GitHub Actions](https://github.com/elenaess/sun/actions/workflows/android.yml) compila o aplicativo e verifica sua assinatura. O teste no emulador busca um anime, abre o episódio e confere a reprodução no player nativo.

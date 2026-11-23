@@ -15,10 +15,22 @@ import androidx.media3.common.*;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.ui.PlayerView;
 import org.json.*;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import androidx.media3.datasource.DefaultDataSource;
+import androidx.media3.datasource.DefaultHttpDataSource;
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
 
 public class PlayerActivity extends Activity {
     private ExoPlayer player;
+    private final ExecutorService network=Executors.newFixedThreadPool(2);
+    private int request;
+    private boolean visible;
+    private boolean online(){return media!=null && "fhd".equals(media.optString("provider"));}
+    private String episodeTag(){return online()?current().optString("id"):"acervo";}
     private PlayerView surface;
     private JSONObject media;
     private JSONArray episodes;
@@ -61,7 +73,7 @@ public class PlayerActivity extends Activity {
         findViewById(R.id.fullscreen).setOnClickListener(v->toggleScreen());
         surface.setFullscreenButtonClickListener(isFull->toggleScreen());
         findViewById(R.id.quality).setOnClickListener(v->chooseQuality());
-        findViewById(R.id.retry).setOnClickListener(v->{quality=0;playWhenReady=true;startVideo();});
+        findViewById(R.id.retry).setOnClickListener(v->{quality=0;if(online())current().remove("streams");playWhenReady=true;startVideo();});
         ((TextView)findViewById(R.id.watch_title)).setText(media.optString("title"));
         ((TextView)findViewById(R.id.watch_credit)).setText(media.optString("credit"));
         layoutForOrientation();
@@ -94,6 +106,38 @@ public class PlayerActivity extends Activity {
         }).show();
     }
     private void startVideo(){
+        final int ticket=++request;
+        if(!visible)return;
+        if(online() && (streams()==null || streams().length()==0)){
+            releasePlayer();
+            rendered=false;
+            findViewById(R.id.play_error).setVisibility(View.GONE);
+            final JSONObject ep=current();
+            final String type=media.optString("mediaType");
+            network.execute(()->{
+                try {
+                    JSONArray results=CatalogApi.streams(type,ep.getString("id")).optJSONArray("streams");
+                    JSONArray choices=new JSONArray();
+                    for(int i=0;results!=null&&i<results.length();i++){
+                        JSONObject option=results.optJSONObject(i);if(option==null)continue;
+                        Uri address=Uri.parse(option.optString("url"));
+                        if(!"https".equalsIgnoreCase(address.getScheme())||address.getHost()==null)continue;
+                        String title=option.optString("title",option.optString("name","Fonte "+(i+1)));
+                        choices.put(new JSONObject().put("url",address.toString()).put("quality",title)
+                            .put("subtitles",option.optJSONArray("subtitles")));
+                    }
+                    if(choices.length()==0)throw new java.io.IOException("Sem vídeo direto");
+                    runOnUiThread(()->{
+                        if(!visible||request!=ticket)return;
+                        try{ep.put("streams",choices);}catch(JSONException e){return;}
+                        updateEpisodes();startVideo();
+                    });
+                }catch(Exception e){
+                    runOnUiThread(()->{if(visible&&ticket==request)error("O provedor não entregou um vídeo para este episódio. Tente novamente.");});
+                }
+            });
+            return;
+        }
         releasePlayer();
         findViewById(R.id.play_error).setVisibility(View.GONE);
         rendered=false;surface.setContentDescription("Carregando vídeo");
@@ -105,24 +149,45 @@ public class PlayerActivity extends Activity {
                 if(!"https".equalsIgnoreCase(uri.getScheme())||uri.getHost()==null)throw new IllegalArgumentException();
             }
             MediaItem.Builder item=new MediaItem.Builder().setUri(uri);
-            if(local==null && "hls".equals(current().optString("type")))item.setMimeType(MimeTypes.APPLICATION_M3U8);
+            String path=uri.getPath()==null?"":uri.getPath().toLowerCase(java.util.Locale.ROOT);
+            if("hls".equals(current().optString("type")) || path.endsWith(".m3u8") ||
+                (online() && !path.endsWith(".mp4") && !path.endsWith(".mkv") && !path.endsWith(".webm")))
+                item.setMimeType(MimeTypes.APPLICATION_M3U8);
+            if(online()){
+                JSONArray subs=streams().getJSONObject(quality).optJSONArray("subtitles");
+                List<MediaItem.SubtitleConfiguration> tracks=new ArrayList<>();
+                for(int i=0;subs!=null&&i<subs.length();i++){
+                    JSONObject sub=subs.optJSONObject(i);if(sub==null)continue;
+                    Uri address=Uri.parse(sub.optString("url"));if(!"https".equalsIgnoreCase(address.getScheme()))continue;
+                    String language=sub.optString("lang","und");
+                    String mime=String.valueOf(address.getPath()).endsWith(".srt")?MimeTypes.APPLICATION_SUBRIP:MimeTypes.TEXT_VTT;
+                    tracks.add(new MediaItem.SubtitleConfiguration.Builder(address).setLanguage(language).setMimeType(mime).build());
+                }
+                item.setSubtitleConfigurations(tracks);
+            }
             if("morevna-pt-BR.vtt".equals(current().optString("subtitle"))) {
                 MediaItem.SubtitleConfiguration sub=new MediaItem.SubtitleConfiguration.Builder(Uri.parse("asset:///cinema/morevna-pt-BR.vtt"))
                     .setLanguage("pt-BR").setLabel("Português (Brasil)").setMimeType(MimeTypes.TEXT_VTT).setSelectionFlags(C.SELECTION_FLAG_DEFAULT).build();
                 item.setSubtitleConfigurations(Collections.singletonList(sub));
             }
-            ExoPlayer next=new ExoPlayer.Builder(this).setSeekBackIncrementMs(10000).setSeekForwardIncrementMs(10000).build();
+            DefaultHttpDataSource.Factory http=new DefaultHttpDataSource.Factory().setUserAgent(CatalogApi.AGENT)
+                .setConnectTimeoutMs(15000).setReadTimeoutMs(25000);
+            DefaultMediaSourceFactory sources=new DefaultMediaSourceFactory(new DefaultDataSource.Factory(this,http));
+            ExoPlayer next=new ExoPlayer.Builder(this).setMediaSourceFactory(sources).setSeekBackIncrementMs(10000).setSeekForwardIncrementMs(10000).build();
             player=next;surface.setPlayer(next);
+            next.setTrackSelectionParameters(next.getTrackSelectionParameters().buildUpon()
+                .setPreferredTextLanguages("pt-BR","pt","por").setPreferredAudioLanguages("pt-BR","pt","por","ja").build());
             next.setAudioAttributes(AudioAttributes.DEFAULT,true);
             next.setHandleAudioBecomingNoisy(true);
             next.addListener(new Player.Listener(){
                 @Override public void onRenderedFirstFrame(){
-                    if(player!=next)return;rendered=true;surface.setContentDescription("Vídeo em reprodução");checkpoint();
+                    if(player!=next)return;rendered=true;android.util.Log.i("SunPlayback","first-frame "+episodeTag());surface.setContentDescription("Vídeo em reprodução");checkpoint();
                 }
                 @Override public void onPlaybackStateChanged(int state){if(player==next && state==Player.STATE_ENDED)checkpoint();}
                 @Override public void onIsPlayingChanged(boolean active){if(player==next)surface.setKeepScreenOn(active);}
                 @Override public void onPlayerError(PlaybackException e){
                     if(player!=next)return;
+                    android.util.Log.w("SunPlayback","provider-error "+e.getErrorCodeName()+" "+episodeTag()+" "+safeError(e));
                     if(rendered)position=next.getCurrentPosition();
                     if(local==null && quality+1<streams().length()){quality++;surface.post(()->{if(player==next)startVideo();});}
                     else error("Não foi possível reproduzir esta fonte. Confira sua conexão e tente de novo.");
@@ -130,6 +195,17 @@ public class PlayerActivity extends Activity {
             });
             next.setMediaItem(item.build(),Math.max(0,position));next.prepare();next.setPlayWhenReady(playWhenReady);
         } catch(Exception e){error("O endereço deste vídeo não pôde ser aberto.");}
+    }
+    private String safeError(Throwable cause){
+        StringBuilder out=new StringBuilder();
+        while(cause!=null){
+            out.append(cause.getClass().getSimpleName()).append(' ');
+            if(cause instanceof androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException){
+                out.append(((androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException)cause).responseCode);
+            }
+            cause=cause.getCause();
+        }
+        return out.toString();
     }
     private void error(String message){
         ((TextView)findViewById(R.id.error_message)).setText(message);
@@ -164,11 +240,12 @@ public class PlayerActivity extends Activity {
         frame.setLayoutParams(new LinearLayout.LayoutParams(-1,fullscreen?-1:Math.max(px(210),w*9/16)));
     }
     @Override public void onConfigurationChanged(Configuration c){super.onConfigurationChanged(c);layoutForOrientation();}
-    @Override protected void onStart(){super.onStart();if(surface!=null)startVideo();}
+    @Override protected void onStart(){super.onStart();visible=true;if(surface!=null)startVideo();}
     @Override protected void onStop(){
-        if(player!=null){checkpoint();position=player.getCurrentPosition();playWhenReady=player.getPlayWhenReady();}
+        visible=false;++request;if(player!=null){checkpoint();position=player.getCurrentPosition();playWhenReady=player.getPlayWhenReady();}
         releasePlayer();super.onStop();
     }
+    @Override protected void onDestroy(){network.shutdownNow();super.onDestroy();}
     @Override protected void onSaveInstanceState(Bundle b){super.onSaveInstanceState(b);b.putInt("episode",episode);b.putInt("quality",quality);b.putLong("position",player==null?position:player.getCurrentPosition());b.putBoolean("play",player==null?playWhenReady:player.getPlayWhenReady());}
     @Override public void onBackPressed(){if(fullscreen){toggleScreen();return;}checkpoint();super.onBackPressed();}
 }

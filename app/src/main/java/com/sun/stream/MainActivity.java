@@ -36,6 +36,14 @@ public class MainActivity extends Activity {
                 Uri u = req.getUrl();
                 if (!HOST.equals(u.getHost()) || !"https".equals(u.getScheme())) return null;
                 String p = u.getPath();
+                if (p != null && p.startsWith("/sun-api/") && "GET".equals(req.getMethod())) {
+                    try {
+                        String body=CatalogApi.read(u.getEncodedPath().substring("/sun-api".length()));
+                        return new WebResourceResponse("application/json","UTF-8",new ByteArrayInputStream(body.getBytes("UTF-8")));
+                    } catch(Exception e) {
+                        return new WebResourceResponse("application/json","UTF-8",503,"Unavailable",Collections.emptyMap(),new ByteArrayInputStream(new byte[0]));
+                    }
+                }
                 if (p != null && p.startsWith("/assets/") && !p.contains("..")) {
                     String file = p.substring(8);
                     try {
