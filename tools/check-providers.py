@@ -107,6 +107,35 @@ def samples(arg):
 def test_media(q,u):
     try:media(q,u)
     except Exception as e: print('media error',q,type(e).__name__,getattr(e,'code',None),flush=True)
+
+def digital(q):
+    base="https://animesdigital.org"
+    search=page(base+'/?s='+U.quote(q))
+    title=next(U.urljoin(base,h) for h in search.links if '/anime/' in h and q.split()[0].lower() in h.lower())
+    detail=page(title)
+    ep=next(U.urljoin(base,h) for h in detail.links if '/video/' in h)
+    for tag,src in page(ep).media:
+        if tag!='iframe':continue
+        url=U.urlsplit(U.urljoin(base,src))
+        if url.hostname!='api.anivideo.net':continue
+        with conn(url.geturl()) as resp:
+            buf=resp.read(260000);kind=resp.headers.get_content_type()
+            print('Player',q,resp.status,kind,flush=True)
+            if buf.startswith(b'#EXTM3U'):test_media(q,url.geturl());continue
+            if kind!='text/html':continue
+            markup=buf.decode(errors='replace')
+            body=Links();body.feed(markup)
+            for t,u in body.media:
+                print('Element',q,t,U.urlsplit(u).hostname,flush=True)
+                if t in ('source','video'):test_media(q,U.urljoin(url.geturl(),u))
+            from html import unescape
+            plain=re.findall(r"""https://[^\s'"<>\\]+?\.m3u8(?:\?[^\s'"<>\\]*)?""",markup)
+            for u in list(dict.fromkeys(plain))[:2]:
+                print('Playlist',q,U.urlsplit(u).hostname,flush=True)
+                test_media(q,unescape(u))
+def countcatalog(skip):
+    ls=api('https://animesfhd.net/stremio/catalog/series/afhd-populares/skip='+str(skip)+'.json')['metas']
+    print('WINDOW',skip,len(ls),[m['id'] for m in ls[:2]],flush=True)
 with ThreadPoolExecutor(max_workers=3) as pool:
-    for host in ["https://animesdrive.cloud","https://animesdigital.org"]:
-        for q in ['Frieren','Naruto','Kimetsu']: pool.submit(test,samples,(host,q))
+    for term in ['Frieren','Kimetsu','Naruto']:pool.submit(test,digital,term)
+    for n in [0,50,500,1000,2000,5000]:pool.submit(test,countcatalog,n)
