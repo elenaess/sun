@@ -15,40 +15,27 @@ def media(tag,u):
             lines=(v+r.read(250000)).decode().splitlines()
             u=U.urljoin(r.geturl(),next(x for x in lines if x.strip() and not x.startswith("#")))
 
-def catalogue_size():
-    def query(n):
-        base='https://animesfhd.net/stremio/catalog/series/afhd-populares/skip='+str(50*n)+'.json'
-        return len(api(base)['metas'])
-    lo,hi=0,1
-    while hi<256 and query(hi)==50:lo,hi=hi,hi*2
-    while lo+1<hi:
-        mid=(lo+hi)//2
-        if query(mid)==50:lo=mid
-        else:hi=mid
-    print('CATALOGUE_ROWS',50*hi+query(hi),flush=True)
-def episodes(term):
-    base='https://animesfhd.net/stremio'
-    a=api(base+'/catalog/series/afhd-populares/search='+U.quote(term)+'.json')['metas'][0]
-    rows=api(base+'/meta/series/'+U.quote(a['id'],safe='')+'.json')['meta']['videos']
-    if not rows:return
-    print('SHOW',a['name'],len(rows),flush=True)
-    for i in sorted({0,len(rows)//2,len(rows)-1}):
-        ep=rows[i]; key=a['name']+' E'+str(ep.get('episode'))
-        try:
-            streams=api(base+'/stream/series/'+U.quote(ep['id'],safe='')+'.json')['streams']
-            link=next(s['url'] for s in streams if s.get('url','').startswith('https://'))
-            for depth in range(4):
-                with conn(link) as res:
-                    head=res.read(600)
-                    if head.lstrip().startswith(b'#EXTM3U'):
-                        full=(head+res.read(150000)).decode();link=U.urljoin(res.geturl(),next(line for line in full.splitlines() if line.strip() and not line.startswith('#')))
-                    elif (head[0]==0x47 and head[188]==0x47) or b'ftyp' in head[:40] or head.startswith(bytes.fromhex('1a45dfa3')):
-                        print('MEDIA_OK',key,flush=True);break
-                    else:raise ValueError('tipo de mídia não reconhecido')
-            else:raise ValueError('sem segmento')
-        except Exception as e:print('MEDIA_FAILED',key,type(e).__name__,getattr(e,'code',None),flush=True)
-with ThreadPoolExecutor(max_workers=3) as pool:
-    jobs=[pool.submit(episodes,t) for t in ['Frieren','Shingeki no Kyojin','Kimetsu no Yaiba','Naruto','One Piece']]+[pool.submit(catalogue_size)]
-    for j in jobs:
-        try:j.result()
-        except Exception as e:print('CHECK_FAILED',type(e).__name__,getattr(e,'code',None),flush=True)
+class Content(HTMLParser):
+    def __init__(self):super().__init__();self.links=[];self.sources=[]
+    def handle_starttag(self,t,a):
+        a=dict(a)
+        if t=='a' and a.get('href'):self.links.append(a['href'])
+        if t in ('source','video') and a.get('src'):self.sources.append(a['src'])
+def page(u):
+    with conn(u) as r:
+        doc=Content();doc.feed(r.read(2200000).decode(errors='replace'));return doc
+def run():
+    host='https://animesdrive.cloud'
+    found=list(dict.fromkeys(U.urljoin(host,u) for u in page(host+'/?s=Naruto').links if '/anime/' in u and 'naruto' in u.lower()))
+    print('VERSIONS',[U.urlsplit(u).path for u in found],flush=True)
+    for title in found:
+        path=U.urlsplit(title).path
+        if any(tag in path for tag in ['shipp','boruto','movie','filme','road','legend','last','blood','clash']):continue
+        eps=list(dict.fromkeys(U.urljoin(host,u) for u in page(title).links if '/episodio/' in u))
+        if not eps: continue
+        for ep in [eps[0], eps[len(eps)//2]]:
+            print('EP',path,U.urlsplit(ep).path,len(eps),flush=True)
+            for link in page(ep).sources[:2]:
+                try:media('classic '+path,link)
+                except Exception as e:print('OFF',type(e).__name__,getattr(e,'code',None),flush=True)
+run()
