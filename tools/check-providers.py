@@ -47,6 +47,41 @@ def site(u):
 def test(f,arg):
     try:f(arg)
     except Exception as e:print("unavailable",f.__name__,arg,type(e).__name__,getattr(e,"code",None),flush=True)
-with ThreadPoolExecutor(max_workers=4) as pool:
-    for f,args in [(fire,["Frieren","Naruto","One Piece","Kimetsu no Yaiba"]),(fhd,["Frieren","Kimetsu no Yaiba"]),(site,["https://animesbrasil.app/episodio/dragon-ball-super-beerus-2-episodio-7","https://animesonline.app","https://api-animesonline-cc.herokuapp.com/search/naruto"])]:
+
+class Links(HTMLParser):
+    def __init__(self):super().__init__();self.links=[];self.media=[]
+    def handle_starttag(self,tag,attrs):
+        a=dict(attrs)
+        if tag=='a' and a.get('href'): self.links.append(a['href'])
+        if tag in ('source','video','iframe') and a.get('src'): self.media.append((tag,a['src']))
+def page(u):
+    p=Links()
+    with conn(u) as r:p.feed(r.read(1600000).decode(errors='replace'))
+    return p
+def webseries(host):
+    q='Frieren'
+    p=page(host+'/?s='+q)
+    urls=list(dict.fromkeys(U.urljoin(host,h) for h in p.links if '/anime/' in h and 'frieren' in h.lower()))
+    print('SearchHTML',host,[U.urlsplit(u).path for u in urls[:3]],flush=True)
+    if not urls:return
+    p=page(urls[0]); eps=list(dict.fromkeys(U.urljoin(host,h) for h in p.links if '/episodio' in h or '/video/' in h))
+    print('EpisodesHTML',host,len(eps),[U.urlsplit(u).path for u in eps[:2]],flush=True)
+    if not eps:return
+    p=page(eps[0]);print('EpisodeHTML',host,[(t,U.urlsplit(u).hostname,U.urlsplit(u).path[-8:]) for t,u in p.media],flush=True)
+    for t,u in p.media:
+        if t in ('source','video') and u.startswith('https://'):media(host,u);break
+def archive_channels(q):
+    from urllib.parse import urlencode
+    u='https://sepiasearch.org/api/v1/search/videos?'+urlencode({'search':q,'count':7,'categoryOneOf':2,'nsfw':'false'})
+    body=api(u)
+    print('PeerTube',q,body.get('total'), [(v.get('name'),v.get('url'),v.get('license')) for v in body.get('data',[])[:3]],flush=True)
+    for v in body.get('data',[])[:3]:
+        if not v.get('url'):continue
+        pub=U.urlsplit(v['url']);vd=api(pub.scheme+'://'+pub.netloc+'/api/v1/videos/'+v['uuid'])
+        files=vd.get('files') or [];pls=vd.get('streamingPlaylists') or []
+        if pls and pls[0].get('playlistUrl'):
+            media('PeerTube '+q,pls[0]['playlistUrl']);break
+        elif files:media('PeerTube '+q,files[0]['fileUrl']);break
+with ThreadPoolExecutor(max_workers=3) as pool:
+    for f,args in [(webseries,["https://animesdrive.cloud","https://animesdigital.org"]),(archive_channels,["Morevna","anime"])]:
         for arg in args:pool.submit(test,f,arg)
