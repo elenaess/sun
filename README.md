@@ -52,3 +52,19 @@ confira autoria/licença na ficha antes de redistribuir vídeos.
 
 Se o teste Big Buck Bunny funcionar e outros vídeos falharem, o player está
 provavelmente operacional e o problema está nos links ou nas fontes externas.
+
+
+## Atualização 0.6.0: camada opcional de APIs
+
+- Aceita um **gateway HTTPS configurado pelo usuário** compatível com o contrato REST
+  [anime-sdk](https://github.com/hexxt-git/anime-sdk): GET /health, /search, /content, /stream.
+- Descobre automaticamente a lista de provedores anunciados por `/health`.
+- Pesquisa títulos de todos os provedores disponíveis simultaneamente; mantém IDs separados.
+- Consulta episódios ao abrir a ficha; solicita a mídia no momento de dar play no Media3.
+- Rejeita destinos sem HTTPS e ignora mídia sem URL direta. Nenhum login no Sun é necessário.
+- O APK **não traz servidores, raspadores, fontes não autorizadas, proxy de bloqueios nem catálogo
+  de vídeos comerciais licenciado**. Somente use gateways e mídias para os quais possui permissão.
+
+Vá em **Perfil > Gateway de APIs**, informe o endpoint HTTPS compatível.
+Sem esse endpoint, o Sun segue usando Stremio, AniList, Wikimedia e Internet Archive.
+Os catálogos podem listar obras que não têm vídeo reproduzível.

@@ -25,6 +25,7 @@ public class MainActivity extends Activity {
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         SunPlugins.init(getApplicationContext());
+        SunApiBridge.init(getApplicationContext());
         web = new WebView(this);
         web.setBackgroundColor(Color.rgb(16, 16, 18));
         WebSettings settings = web.getSettings();
@@ -99,6 +100,11 @@ public class MainActivity extends Activity {
                     String data=u.getQueryParameter("data");
                     if(data==null || data.length()>90000) throw new IllegalArgumentException();
                     startActivityForResult(new Intent(this,PlayerActivity.class).putExtra("data",data),PLAY);break;
+                case "sdk":
+                    String api=u.getQueryParameter("data");
+                    if(api==null || !SunApiBridge.configure(api))
+                        throw new IllegalArgumentException("API inválida");
+                    web.loadUrl(HOME);break;
                 case "plugins":
                     String plugins=u.getQueryParameter("data");
                     if(plugins==null || plugins.length()>5000 || !SunPlugins.install(plugins))

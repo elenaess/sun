@@ -9,6 +9,11 @@ final class CatalogApi {
     static final String ROOT="https://animesfhd.net/stremio";
     static final String AGENT="SunAndroid/0.4 (+https://github.com/elenaess/sun)";
     static String read(String path) throws IOException {
+        if(path.startsWith("/sdk/")) {
+            try{return SunApiBridge.read(path);}
+            catch(IOException e){throw e;}
+            catch(Exception e){throw new IOException("Gateway indisponível",e);}
+        }
         if("/providers.json".equals(path))return SunPlugins.providers();
         if(path.startsWith("/plugin/")) {
             try {

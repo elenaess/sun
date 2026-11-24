@@ -9,7 +9,7 @@ let selected = null, detailTab = 'Episódios', query = '', searchSerial = 0, sea
 const feed = {popular:[],latest:[],dub:[],films:[]}, more = {}, pageOffsets = {};
 let loadingFeed=true, feedError=false, remoteSearch=[], searchOffset=0, canSearchMore=false, searchProviderError=false, browseKey='popular', season='1', episodePage=0, detailError=false, loadingSeries=false;
 let discovering = false, searchFailed = false, historyTab = false, homeScroll = 0;
-const defaults = {saved:{},history:{},sources:{},plugins:[],theme:'dark'};
+const defaults = {saved:{},history:{},sources:{},plugins:[],sdkUrl:'',theme:'dark'};
 let prefs;
 try {prefs = Object.assign({}, defaults, JSON.parse(localStorage.getItem(KEY) || '{}'));} catch {prefs = {...defaults};}
 const name = m => m.name || m.title?.english || m.title?.romaji || 'Sem título';
@@ -33,7 +33,7 @@ function toast(message) {
   clearTimeout(toastTimer);toastTimer=setTimeout(()=>out.classList.remove('shown'),2600);
 }
 function tracks(m) {
-  if(['fhd','plugin'].includes(m.provider))return m.providerEpisodes||[];
+  if(['fhd','plugin','sdk'].includes(m.provider))return m.providerEpisodes||[];
   if(['open','archive'].includes(m.provider) && Array.isArray(m.streams) && m.streams.some(s=>external(s.url)))
     return [{id:'open-'+String(m.id),name:'Vídeo completo',streams:m.streams}];
   const original = films.find(f=>f.id===m.id);
@@ -41,7 +41,7 @@ function tracks(m) {
   const extras = Array.isArray(prefs.sources[m.id]) ? prefs.sources[m.id] : [];
   return eps.concat(extras.filter(e=>e && external(e.streams?.[0]?.url)));
 }
-function playable(m){return ['fhd','plugin'].includes(m.provider)||tracks(m).length>0;}
+function playable(m){return ['fhd','plugin','sdk'].includes(m.provider)||tracks(m).length>0;}
 function known(m){
   const old=catalog.get(String(m.id));
   if(old?.providerEpisodes&&!m.providerEpisodes)return old;
@@ -130,13 +130,19 @@ function toolsPage(){
     <button class="row" data-action="link">${icon('plus')} Abrir link de vídeo</button>${editing?sourceForm(false):''}`;
 }
 function profile(){
-  return `<h1>Perfil</h1><div class="identity"><img src="./cinema/morevna.jpg" alt=""><div><strong>Meu perfil</strong><small>Sun 0.5.0</small></div></div>
+  return `<h1>Perfil</h1><div class="identity"><img src="./cinema/morevna.jpg" alt=""><div><strong>Meu perfil</strong><small>Sun 0.6.0</small></div></div>
     <button class="row" data-action="theme">${icon('moon')} Tema ${prefs.theme==='light'?'claro':'escuro'}</button>
     <button class="row" data-action="export">${icon('download')} Exportar biblioteca</button>
     <button class="row" data-action="import">${icon('upload')} Importar biblioteca</button>
     <button class="row" data-action="selftest">${icon('play')} Testar player com Big Buck Bunny (MP4 livre)</button>
     <p class="desc">O Sun também pesquisa vídeos com licença aberta no Wikimedia Commons.
     Internet Archive e Wikimedia Commons incluem materiais com indicação de licença aberta. Fichas do AniList não garantem vídeo reproduzível.</p>
+    <h2>Gateway de APIs</h2>
+    <p class="desc">Adicione um endpoint HTTPS compatível com anime-sdk que você pode utilizar.
+    O Sun detecta os provedores declarados pelo servidor e pesquisa em paralelo; nenhum servidor externo é instalado automaticamente.</p>
+    <form id="sdk-form"><label>Endereço HTTPS da API<input id="sdk-url" type="url"
+      placeholder="https://minha-api.exemplo" value="${esc(prefs.sdkUrl||'')}"></label>
+      <button class="cta">Salvar gateway (vazio para desligar)</button></form>
     <h2>Plugins de vídeo</h2><p class="desc">Até 18 manifestos Stremio compatíveis; sem conta no Sun. A disponibilidade e os direitos dependem de cada fonte.</p>
     ${(prefs.plugins||[]).map((url,i)=>`<div class="row plugin-row"><div><strong>Fonte ${i+1}</strong><small>${esc(url)}</small></div><button class="plugin-remove" data-action="remove-plugin" data-index="${i}" aria-label="Remover fonte ${i+1}">Remover</button></div>`).join('')}
     <form id="plugin-form"><label>Manifesto Stremio HTTPS<input required id="plugin-manifest" type="url" placeholder="https://provedor.exemplo/manifest.json"></label><button class="cta">Adicionar plugin</button></form>
@@ -154,7 +160,7 @@ function detail(m){
   const eps=tracks(m), saved=!!prefs.saved[m.id], history=prefs.history[m.id];
   const source=external(m.source), license=external(m.licenseUrl);
   const links=(Array.isArray(m.externalLinks)?m.externalLinks:[]).filter(l=>external(l.url)&&l.type==='STREAMING').slice(0,5);
-  const isOnline=['fhd','plugin'].includes(m.provider);
+  const isOnline=['fhd','plugin','sdk'].includes(m.provider);
   const seasons=[...new Set(eps.map(e=>String(e.season??1)))];
   if(!seasons.includes(season))season=seasons[0]||'1';
   const group=eps.map((e,i)=>({e,i})).filter(v=>!isOnline||String(v.e.season??1)===season);
@@ -214,6 +220,13 @@ async function discover(term=''){
         const primary=group[0].value||[];searchOffset=primary.length;canSearchMore=primary.length>=50;
         remoteSearch=[...new Map(group.flatMap(r=>r.value||[]).map(m=>[m.id,known(m)])).values()];
         searchProviderError=group.every(r=>r.status==='rejected');
+        // Gateway opcional em paralelo: nao bloqueia a busca principal nem o AniList.
+        if(prefs.sdkUrl)SdkProvider.searchAll(term).then(rows=>{
+          if(seq!==searchSerial)return;
+          remoteSearch=[...new Map([...remoteSearch,...rows.map(known)].map(m=>[m.id,m])).values()];
+          if(rows.length)searchProviderError=false;
+          updateSearch();
+        }).catch(()=>{});
         updateSearch();
       }catch{if(seq===searchSerial)searchProviderError=true;}
     }
@@ -228,8 +241,8 @@ async function discover(term=''){
   }
 }
 async function launch(m,index){
-  if(['fhd','plugin'].includes(m.provider)&&!m.providerEpisodes){
-    try{m=known(await AnimeProvider.detail(m));}catch{enter(m);return;}
+  if(['fhd','plugin','sdk'].includes(m.provider)&&!m.providerEpisodes){
+    try{m=known(await (m.provider==='sdk'?SdkProvider.detail(m):AnimeProvider.detail(m)));}catch{enter(m);return;}
   }
   if(m.provider==='archive'&&!m.streams?.length){
     try{m=known(await OpenArchive.detail(m));}catch{enter(m);return;}
@@ -238,10 +251,10 @@ async function launch(m,index){
   if(!eps.length){selected=m;detailTab='Episódios';render();return;}
   const h=prefs.history[m.id]||{}, last=eps.findIndex(e=>e.id===h.lastEpisode);
   const chosen=Number.isInteger(index)?index:Math.max(0,last);
-  const windowStart=['fhd','plugin'].includes(m.provider)?Math.floor(chosen/30)*30:0;
-  const queue=['fhd','plugin'].includes(m.provider)?eps.slice(windowStart,windowStart+30):eps;
-  const data={provider:m.provider||'',sourceIndex:m.sourceIndex||0,mediaType:m.type||'',id:String(m.id),title:name(m),series:format(m)==='Série',credit:[m.creator,m.license].filter(Boolean).join(' · '),index:chosen-windowStart,
-    episodes:queue.map(e=>({id:e.id,name:e.name,streams:e.streams,subtitle:e.subtitle,position:h.episodes?.[e.id]?.position||0}))};
+  const windowStart=['fhd','plugin','sdk'].includes(m.provider)?Math.floor(chosen/30)*30:0;
+  const queue=['fhd','plugin','sdk'].includes(m.provider)?eps.slice(windowStart,windowStart+30):eps;
+  const data={provider:m.provider||'',sdkProvider:m.sdkProvider||'',language:'sub',sourceIndex:m.sourceIndex||0,mediaType:m.type||'',id:String(m.id),title:name(m),series:format(m)==='Série',credit:[m.creator,m.license].filter(Boolean).join(' · '),index:chosen-windowStart,
+    episodes:queue.map(e=>({id:e.id,name:e.name,streams:e.streams,subtitle:e.subtitle,language:e.language||'sub',position:h.episodes?.[e.id]?.position||0}))};
   if(videoOrigin)location.href='sun://play?data='+encodeURIComponent(JSON.stringify(data));
   else {let streams=eps[chosen].streams;if(['fhd','plugin'].includes(m.provider)){try{streams=(await AnimeProvider.stream(m,eps[chosen])).streams;}catch{streams=[];}}
     const url=external(streams?.[0]?.url);if(!url){toast('Fonte indisponível.');return;}
@@ -255,10 +268,10 @@ window.sunProgress=raw=>{
 async function enter(m){
   if(!m)return;if(!selected)homeScroll=window.scrollY;
   selected=m;editing=false;detailTab='Episódios';season='1';episodePage=0;detailError=false;
-  loadingSeries=(['fhd','plugin'].includes(m.provider)&&!m.providerEpisodes)||
+  loadingSeries=(['fhd','plugin','sdk'].includes(m.provider)&&!m.providerEpisodes)||
     (m.provider==='archive'&&!m.streams?.length);render();window.scrollTo(0,0);
   if(!loadingSeries)return;
-  try{const full=known(await (m.provider==='archive'?OpenArchive.detail(m):AnimeProvider.detail(m)));if(selected?.id===m.id)selected=full;}
+  try{const full=known(await (m.provider==='archive'?OpenArchive.detail(m):m.provider==='sdk'?SdkProvider.detail(m):AnimeProvider.detail(m)));if(selected?.id===m.id)selected=full;}
   catch{if(selected?.id===m.id)detailError=true;}
   finally{if(selected?.id===m.id){loadingSeries=false;render();}}
 }
@@ -304,6 +317,15 @@ app.addEventListener('input',e=>{
 });
 app.addEventListener('submit',e=>{
   e.preventDefault();
+  if(e.target.id==='sdk-form'){
+    const value=document.getElementById('sdk-url').value.trim();
+    const url=value?external(value).replace(/\/$/,''):'';
+    if(value&&!url){toast('Use um endereço HTTPS válido');return;}
+    prefs.sdkUrl=url;persist();SdkProvider.refresh();
+    if(videoOrigin)location.href='sun://sdk?data='+encodeURIComponent(url);
+    else render();
+    toast(url?'Gateway salvo.':'Gateway desligado.');return;
+  }
   if(e.target.id==='plugin-form'){
     const url=external(document.getElementById('plugin-manifest').value.trim());
     if(!url || !url.endsWith('/manifest.json')){toast('Use um endereço HTTPS terminado em /manifest.json');return;}
@@ -323,7 +345,7 @@ app.addEventListener('submit',e=>{
 document.getElementById('importData').addEventListener('change',async e=>{
   try{const file=e.target.files[0];if(!file)return;if(file.size>5000000)throw Error();const p=JSON.parse(await file.text());
     if(!p.saved||typeof p.saved!=='object'||!p.history||typeof p.history!=='object')throw Error();
-    prefs={saved:p.saved,history:p.history,sources:p.sources||{},plugins:Array.isArray(p.plugins)?p.plugins:[],theme:p.theme==='light'?'light':'dark'};persist();syncPlugins();render();toast('Biblioteca restaurada.');}
+    prefs={saved:p.saved,history:p.history,sources:p.sources||{},plugins:Array.isArray(p.plugins)?p.plugins:[],sdkUrl:typeof p.sdkUrl==='string'?p.sdkUrl:'',theme:p.theme==='light'?'light':'dark'};persist();syncPlugins();render();toast('Biblioteca restaurada.');}
   catch{toast('Não foi possível restaurar esse arquivo.');}e.target.value='';
 });
 document.getElementById('close-preview').onclick=()=>{document.getElementById('preview').replaceChildren();document.getElementById('web-player').close();};

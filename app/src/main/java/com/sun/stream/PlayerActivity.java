@@ -29,7 +29,7 @@ public class PlayerActivity extends Activity {
     private final ExecutorService network=Executors.newFixedThreadPool(2);
     private int request;
     private boolean visible;
-    private boolean online(){return media!=null && ("fhd".equals(media.optString("provider")) || "plugin".equals(media.optString("provider")));}
+    private boolean online(){return media!=null && ("fhd".equals(media.optString("provider")) || "plugin".equals(media.optString("provider")) || "sdk".equals(media.optString("provider")));}
     private String episodeTag(){return online()?current().optString("id"):"acervo";}
     private PlayerView surface;
     private JSONObject media;
@@ -116,7 +116,10 @@ public class PlayerActivity extends Activity {
             final String type=media.optString("mediaType");
             network.execute(()->{
                 try {
-                    JSONArray results=CatalogApi.streams(type,ep.getString("id"),media.optInt("sourceIndex",0)).optJSONArray("streams");
+                    JSONObject response="sdk".equals(media.optString("provider"))
+                        ? SunApiBridge.streams(media.optString("sdkProvider"),ep.getString("id"),ep.optString("language",media.optString("language","sub")))
+                        : CatalogApi.streams(type,ep.getString("id"),media.optInt("sourceIndex",0));
+                    JSONArray results=response.optJSONArray("streams");
                     JSONArray choices=new JSONArray();
                     for(int i=0;results!=null&&i<results.length();i++){
                         JSONObject option=results.optJSONObject(i);if(option==null)continue;
