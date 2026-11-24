@@ -125,7 +125,7 @@ public class PlayerActivity extends Activity {
                         JSONObject option=results.optJSONObject(i);if(option==null)continue;
                         Uri address=Uri.parse(option.optString("url"));
                         if(!"https".equalsIgnoreCase(address.getScheme())||address.getHost()==null)continue;
-                        String title=option.optString("title",option.optString("name","Fonte "+(i+1)));
+                        String title=option.optString("title",option.optString("quality",option.optString("name","Fonte "+(i+1))));
                         JSONObject candidate = new JSONObject().put("url",address.toString()).put("quality",title)
                             .put("subtitles",option.optJSONArray("subtitles"));
                         if(option.has("mimeType"))candidate.put("mimeType",option.optString("mimeType"));
@@ -156,6 +156,22 @@ public class PlayerActivity extends Activity {
                 variant=streams().getJSONObject(quality);
                 uri=Uri.parse(variant.getString("url"));
                 if(!"https".equalsIgnoreCase(uri.getScheme())||uri.getHost()==null)throw new IllegalArgumentException();
+            }
+            if (MediaFormat.needsProbe(uri, variant)) {
+                final JSONObject source = variant;
+                final Uri address = uri;
+                network.execute(() -> {
+                    String format = MediaFormat.detect(address);
+                    runOnUiThread(() -> {
+                        if (!visible || ticket != request) return;
+                        try {
+                            source.put("checkedFormat", true);
+                            if (!format.isEmpty()) source.put("mimeType", format);
+                        } catch (JSONException ignored) {}
+                        startVideo();
+                    });
+                });
+                return;
             }
             MediaItem.Builder item=new MediaItem.Builder().setUri(uri);
             String path=uri.getPath()==null?"":uri.getPath().toLowerCase(java.util.Locale.ROOT);

@@ -2,7 +2,7 @@ name: Sun APK
 
 on:
   push:
-    branches: [main]
+    branches: [main, sun-playback-070]
   workflow_dispatch:
 
 permissions:
@@ -42,7 +42,6 @@ jobs:
           dns=$(awk '/^nameserver / && $2 ~ /^[0-9.]+$/ && $2 !~ /^127/ {print $2; exit}' /run/systemd/resolve/resolv.conf /etc/resolv.conf 2>/dev/null || true)
           echo "SUN_DNS=${dns:-1.1.1.1,8.8.8.8}" >> "$GITHUB_ENV"
       - name: Reproduzir um anime no Android
-        continue-on-error: true # Falha externa de fonte não bloqueia distribuição do APK
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 32

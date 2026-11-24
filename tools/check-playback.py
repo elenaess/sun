@@ -42,9 +42,10 @@ adb("logcat","-c")
 adb("shell","am","start","-W","-n","com.sun.stream/.MainActivity")
 try:
     tap("Buscar")
-    tap("Pesquisar anime",True)
+    tap("search")
     adb("shell","input","text","Frieren")
     find_node("Episódios no Sun")
+    adb("shell","input","keyevent","KEYCODE_ESCAPE") if "mInputShown=true" in adb("shell","dumpsys","input_method") else None
     tap("Abrir Sousou no Frieren",True)
     tap("Assistir")
     until=time.monotonic()+150
