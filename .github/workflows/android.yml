@@ -41,6 +41,8 @@ jobs:
           sudo udevadm trigger --name-match=kvm
           dns=$(awk '/^nameserver / && $2 ~ /^[0-9.]+$/ && $2 !~ /^127/ {print $2; exit}' /run/systemd/resolve/resolv.conf /etc/resolv.conf 2>/dev/null || true)
           echo "SUN_DNS=${dns:-1.1.1.1,8.8.8.8}" >> "$GITHUB_ENV"
+      - name: Preparar teste da interface
+        run: python3 -m pip install websocket-client==1.8.0
       - name: Reproduzir um anime no Android
         uses: reactivecircus/android-emulator-runner@v2
         with:

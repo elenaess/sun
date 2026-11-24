@@ -9,6 +9,10 @@ final class CatalogApi {
     static final String ROOT="https://animesfhd.net/stremio";
     static final String AGENT="SunAndroid/0.7 (+https://github.com/elenaess/sun)";
     static String read(String path) throws IOException {
+        if(path.startsWith("/drive/")) {
+            try{return AnimeDrive.read(path);}
+            catch(Exception e){throw new IOException("AnimesDrive indisponível", e);}
+        }
         if(path.startsWith("/sdk/")) {
             try{return SunApiBridge.read(path);}
             catch(IOException e){throw e;}

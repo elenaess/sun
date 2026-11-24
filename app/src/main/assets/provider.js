@@ -80,7 +80,7 @@ const AnimeProvider = (() => {
       const season=Number(v.season??1),number=Number(v.episode??v.number??(eps.length+1));
       const title=v.title||v.name||'';
       eps.push({id:String(v.id),name:title&&title!==m.name?'E'+number+' · '+title:'Episódio '+number,
-        season,number,cover:v.thumbnail||''});
+        season,number,numbered:v.episode!=null||v.number!=null,cover:v.thumbnail||''});
     }
     if(!eps.length&&m.type==='movie')eps.push({id:String(meta.id),name:'Filme completo',number:1,season:1});
     eps.sort((a,b)=>a.season-b.season||a.number-b.number);

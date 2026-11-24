@@ -1,5 +1,5 @@
-const CACHE = 'sun-shell-v0.3.0';
-const ASSETS = ['./', './index.html','./styles.css','./app.js','./icons.js','./provider.js','./symbol.png','./cinema/catalog.json','./icon-192.png','./icon-512.png','./manifest.webmanifest'];
+const CACHE = 'sun-shell-v0.7.0';
+const ASSETS = ['./', './index.html','./styles.css','./app.js','./icons.js','./provider.js','./extra-sources.js','./sdkprovider.js','./openarchive.js','./openmedia.js','./symbol.png','./cinema/catalog.json','./icon-192.png','./icon-512.png','./manifest.webmanifest'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS)).then(() => self.skipWaiting()));
 });
@@ -8,6 +8,7 @@ self.addEventListener('activate', event => {
 });
 self.addEventListener('fetch', event => {
   const req = event.request;
+  if (new URL(req.url).pathname.startsWith('/sun-api/')) return;
   if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
   event.respondWith(fetch(req).then(res => { if (res.ok) {const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy));} return res; }).catch(() => caches.match(req)));
 });

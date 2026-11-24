@@ -26,6 +26,7 @@ public class MainActivity extends Activity {
         super.onCreate(state);
         SunPlugins.init(getApplicationContext());
         SunApiBridge.init(getApplicationContext());
+        WebView.setWebContentsDebuggingEnabled((getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0);
         web = new WebView(this);
         web.setBackgroundColor(Color.rgb(16, 16, 18));
         WebSettings settings = web.getSettings();

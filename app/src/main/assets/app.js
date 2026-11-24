@@ -17,7 +17,7 @@ const format = m => m.kind || (m.format === 'MOVIE' ? 'Filme' : 'Série');
 const year = m => m.year || m.seasonYear || '';
 const external = value => {try {const u = new URL(value);return u.protocol === 'https:' ? u.href : '';} catch {return '';}};
 const cover = (m,wide=false) => films.find(f => f.id === m.id)?.cover || (wide && external(m.bannerImage)) || external(m.coverImage?.large) || external(m.bannerImage);
-const subtitle = m => [m.genre || m.genres?.[0],year(m)].filter(Boolean).join(' · ');
+const subtitle = m => [m.provider==='fhd'?'AnimesFHD':m.genre || m.genres?.[0],year(m)].filter(Boolean).join(' · ');
 const node = (id) => catalog.get(String(id)) || prefs.saved[id]?.media || prefs.history[id]?.media;
 const art = (m,wide=false) => cover(m,wide) ? `<img class="art" src="${esc(cover(m,wide))}" alt="" loading="lazy">` : '<span class="art blank"></span>';
 const btn = (action,label,symbol,attrs='') => `<button data-action="${action}" aria-label="${esc(label)}" title="${esc(label)}" ${attrs}>${icon(symbol,22)}</button>`;
@@ -32,8 +32,15 @@ function toast(message) {
   const out=document.getElementById('notice');out.textContent=message;out.classList.add('shown');
   clearTimeout(toastTimer);toastTimer=setTimeout(()=>out.classList.remove('shown'),2600);
 }
+function isSeriesSource(m){return ['fhd','plugin','sdk','drive','peertube','archive'].includes(m.provider);}
+function sourceDetail(m){
+  if(m.provider==='archive')return OpenArchive.detail(m);
+  if(m.provider==='sdk')return SdkProvider.detail(m);
+  if(m.provider==='drive'||m.provider==='peertube')return ExtraSources.detail(m);
+  return AnimeProvider.detail(m);
+}
 function tracks(m) {
-  if(['fhd','plugin','sdk'].includes(m.provider))return m.providerEpisodes||[];
+  if(isSeriesSource(m)&&m.providerEpisodes)return m.providerEpisodes;
   if(['open','archive'].includes(m.provider) && Array.isArray(m.streams) && m.streams.some(s=>external(s.url)))
     return [{id:'open-'+String(m.id),name:'Vídeo completo',streams:m.streams}];
   const original = films.find(f=>f.id===m.id);
@@ -41,7 +48,7 @@ function tracks(m) {
   const extras = Array.isArray(prefs.sources[m.id]) ? prefs.sources[m.id] : [];
   return eps.concat(extras.filter(e=>e && external(e.streams?.[0]?.url)));
 }
-function playable(m){return ['fhd','plugin','sdk'].includes(m.provider)||tracks(m).length>0;}
+function playable(m){return isSeriesSource(m)||tracks(m).length>0;}
 function known(m){
   const old=catalog.get(String(m.id));
   if(old?.providerEpisodes&&!m.providerEpisodes)return old;
@@ -110,10 +117,13 @@ function home(){
     ${filter==='Início'||filter==='Animes'?rail('Clássicos japoneses',films.filter(f=>f.year<1950)):''}`;
 }
 function search(){
+  const peer=remoteSearch.filter(m=>m.provider==='peertube'),episodes=remoteSearch.filter(m=>!['peertube','open','archive'].includes(m.provider)),others=remoteSearch.filter(m=>['open','archive'].includes(m.provider));
   const local=films.filter(f=>name(f).toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
   const remote=query.trim()?results:trending;
   return `<h1>Buscar</h1><label class="searchbox">${icon('search')}<input autocomplete="off" id="search" aria-label="Pesquisar anime" type="search" placeholder="Anime, série ou filme" value="${esc(query)}"></label>
-    ${remoteSearch.length&&query.trim()?`<h2>Episódios no Sun</h2>${showGrid(remoteSearch)}${canSearchMore?'<button class="row" data-action="search-more">Mais resultados</button>':''}`:''}
+    ${episodes.length&&query.trim()?`<h2>Episódios no Sun</h2>${showGrid(episodes)}${canSearchMore?'<button class="row" data-action="search-more">Mais resultados</button>':''}`:''}
+    ${peer.length?`<h2>Vídeos da comunidade · PeerTube</h2>${showGrid(peer)}`:''}
+    ${others.length?`<h2>Acervos abertos</h2>${showGrid(others)}`:''}
     ${!query.trim()?feedRail('Explorar a biblioteca','popular'):''}
     ${searchProviderError?'<p class="muted">A busca de episódios está indisponível. Tente novamente.</p>':''}
     ${local.length?`<h2>Cinema aberto</h2><div class="grid">${local.map(m=>card(m)).join('')}</div>`:''}
@@ -160,7 +170,7 @@ function detail(m){
   const eps=tracks(m), saved=!!prefs.saved[m.id], history=prefs.history[m.id];
   const source=external(m.source), license=external(m.licenseUrl);
   const links=(Array.isArray(m.externalLinks)?m.externalLinks:[]).filter(l=>external(l.url)&&l.type==='STREAMING').slice(0,5);
-  const isOnline=['fhd','plugin','sdk'].includes(m.provider);
+  const isOnline=isSeriesSource(m);
   const seasons=[...new Set(eps.map(e=>String(e.season??1)))];
   if(!seasons.includes(season))season=seasons[0]||'1';
   const group=eps.map((e,i)=>({e,i})).filter(v=>!isOnline||String(v.e.season??1)===season);
@@ -214,19 +224,20 @@ async function discover(term=''){
   const ctrl=new AbortController(), timer=setTimeout(()=>ctrl.abort(),10000);
   try {
     if(term){
+      const extra=[ExtraSources.searchDrive(term),ExtraSources.searchPeer(term)];
+      if(prefs.sdkUrl)extra.push(SdkProvider.searchAll(term));
+      for(const task of extra)task.then(rows=>{
+        if(seq!==searchSerial)return;
+        remoteSearch=[...new Map([...remoteSearch,...rows.map(known)].map(m=>[m.id,m])).values()];
+        if(rows.length)searchProviderError=false;
+        updateSearch();
+      }).catch(()=>{});
       try {
         const group=await Promise.allSettled([AnimeProvider.catalog('popular',term),AnimeProvider.catalog('films',term)]);
         if(seq!==searchSerial)return;
         const primary=group[0].value||[];searchOffset=primary.length;canSearchMore=primary.length>=50;
-        remoteSearch=[...new Map(group.flatMap(r=>r.value||[]).map(m=>[m.id,known(m)])).values()];
+        remoteSearch=[...new Map([...group.flatMap(r=>r.value||[]).map(known),...remoteSearch].map(m=>[m.id,m])).values()];
         searchProviderError=group.every(r=>r.status==='rejected');
-        // Gateway opcional em paralelo: nao bloqueia a busca principal nem o AniList.
-        if(prefs.sdkUrl)SdkProvider.searchAll(term).then(rows=>{
-          if(seq!==searchSerial)return;
-          remoteSearch=[...new Map([...remoteSearch,...rows.map(known)].map(m=>[m.id,m])).values()];
-          if(rows.length)searchProviderError=false;
-          updateSearch();
-        }).catch(()=>{});
         updateSearch();
       }catch{if(seq===searchSerial)searchProviderError=true;}
     }
@@ -241,20 +252,18 @@ async function discover(term=''){
   }
 }
 async function launch(m,index){
-  if(['fhd','plugin','sdk'].includes(m.provider)&&!m.providerEpisodes){
-    try{m=known(await (m.provider==='sdk'?SdkProvider.detail(m):AnimeProvider.detail(m)));}catch{enter(m);return;}
+  if(isSeriesSource(m)&&!m.providerEpisodes){
+    try{m=known(await sourceDetail(m));}catch{enter(m);return;}
   }
-  if(m.provider==='archive'&&!m.streams?.length){
-    try{m=known(await OpenArchive.detail(m));}catch{enter(m);return;}
-  }
+
   const eps=tracks(m);
   if(!eps.length){selected=m;detailTab='Episódios';render();return;}
   const h=prefs.history[m.id]||{}, last=eps.findIndex(e=>e.id===h.lastEpisode);
   const chosen=Number.isInteger(index)?index:Math.max(0,last);
-  const windowStart=['fhd','plugin','sdk'].includes(m.provider)?Math.floor(chosen/30)*30:0;
-  const queue=['fhd','plugin','sdk'].includes(m.provider)?eps.slice(windowStart,windowStart+30):eps;
+  const windowStart=isSeriesSource(m)?Math.floor(chosen/30)*30:0;
+  const queue=isSeriesSource(m)?eps.slice(windowStart,windowStart+30):eps;
   const data={provider:m.provider||'',sdkProvider:m.sdkProvider||'',language:'sub',sourceIndex:m.sourceIndex||0,mediaType:m.type||'',id:String(m.id),title:name(m),series:format(m)==='Série',credit:[m.creator,m.license].filter(Boolean).join(' · '),index:chosen-windowStart,
-    episodes:queue.map(e=>({id:e.id,name:e.name,streams:e.streams,subtitle:e.subtitle,language:e.language||'sub',position:h.episodes?.[e.id]?.position||0}))};
+    episodes:queue.map(e=>({id:e.id,name:e.name,number:e.number,numbered:e.numbered===true,season:e.season,streams:e.streams,subtitle:e.subtitle,language:e.language||'sub',position:h.episodes?.[e.id]?.position||0}))};
   if(videoOrigin)location.href='sun://play?data='+encodeURIComponent(JSON.stringify(data));
   else {let streams=eps[chosen].streams;if(['fhd','plugin'].includes(m.provider)){try{streams=(await AnimeProvider.stream(m,eps[chosen])).streams;}catch{streams=[];}}
     const url=external(streams?.[0]?.url);if(!url){toast('Fonte indisponível.');return;}
@@ -268,10 +277,9 @@ window.sunProgress=raw=>{
 async function enter(m){
   if(!m)return;if(!selected)homeScroll=window.scrollY;
   selected=m;editing=false;detailTab='Episódios';season='1';episodePage=0;detailError=false;
-  loadingSeries=(['fhd','plugin','sdk'].includes(m.provider)&&!m.providerEpisodes)||
-    (m.provider==='archive'&&!m.streams?.length);render();window.scrollTo(0,0);
+  loadingSeries=isSeriesSource(m)&&!m.providerEpisodes;render();window.scrollTo(0,0);
   if(!loadingSeries)return;
-  try{const full=known(await (m.provider==='archive'?OpenArchive.detail(m):m.provider==='sdk'?SdkProvider.detail(m):AnimeProvider.detail(m)));if(selected?.id===m.id)selected=full;}
+  try{const full=known(await sourceDetail(m));if(selected?.id===m.id)selected=full;}
   catch{if(selected?.id===m.id)detailError=true;}
   finally{if(selected?.id===m.id){loadingSeries=false;render();}}
 }

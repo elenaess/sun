@@ -42,17 +42,27 @@ const OpenArchive = (() => {
     const metadata=await getJson(METADATA+encodeURIComponent(m.remoteId),10000);
     const license=metadata.metadata?.licenseurl;
     if(!licensed(license))throw Error('Sem licença aberta válida');
-    const files=(metadata.files||[]).filter(f=>typeof f.name==='string'&&/\.(mp4|webm)$/i.test(f.name)
-      && !/thumb|sample|preview/i.test(f.name)&&f.private!=='true');
-    files.sort((a,b)=>Number(a.size||0)-Number(b.size||0));
-    const variants=files.slice(0,6).map(f=>{
-      const file=String(f.name).split('/').map(encodeURIComponent).join('/');
-      const type=/\.webm$/i.test(f.name)?'video/webm':'video/mp4';
-      return {url:'https://archive.org/download/'+encodeURIComponent(m.remoteId)+'/'+file,
-        mimeType:type,quality:clean(f.format||f.name)};
-    });
-    if(!variants.length)throw Error('Este item não tem MP4 ou WebM compatível');
-    return {...m,licenseUrl:String(license),streams:variants,description:clean(metadata.metadata?.description)||m.description};
+    const all=metadata.files||[], byName=new Map(all.map(f=>[f.name,f])), groups=new Map();
+    const visible=all.filter(f=>typeof f.name==='string' && /\.(mp4|webm)$/i.test(f.name) &&
+      !/thumb|sample|preview/i.test(f.name) && f.private!==true && f.private!=='true');
+    for(const f of visible){
+      let root=f;
+      const seen=new Set([root.name]);
+      while(root.original && byName.has(root.original) && !seen.has(root.original)){
+        root=byName.get(root.original);seen.add(root.name);
+      }
+      const key=root.name,group=groups.get(key)||[];
+      const file=f.name.split('/').map(encodeURIComponent).join('/');
+      group.push({url:'https://archive.org/download/'+encodeURIComponent(m.remoteId)+'/'+file,
+        mimeType:/\.webm$/i.test(f.name)?'video/webm':'video/mp4',quality:clean(f.format||f.name),
+        size:Number(f.size)||0});
+      groups.set(key,group);
+    }
+    const entries=[...groups.entries()].sort(([a],[b])=>a.localeCompare(b,'pt',{numeric:true}));
+    if(!entries.length)throw Error('Este item não tem MP4 ou WebM compatível');
+    const episodes=entries.map(([key,choices],i)=>({id:key,name:clean(byName.get(key)?.title)||key.replace(/\.[^.]+$/,''),
+      number:i+1,season:1,streams:choices.sort((a,b)=>a.size-b.size).slice(0,6)}));
+    return {...m,licenseUrl:String(license),providerEpisodes:episodes,description:clean(metadata.metadata?.description)||m.description};
   }
   return {search,detail,licensed,legalItem};
 })();
