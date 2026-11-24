@@ -82,6 +82,31 @@ def archive_channels(q):
         if pls and pls[0].get('playlistUrl'):
             media('PeerTube '+q,pls[0]['playlistUrl']);break
         elif files:media('PeerTube '+q,files[0]['fileUrl']);break
+
+def samples(arg):
+    host,q=arg
+    p=page(host+'/?s='+U.quote(q)); title=next(U.urljoin(host,h) for h in p.links if '/anime/' in h and q.split()[0].lower() in h.lower())
+    p=page(title);eps=list(dict.fromkeys(U.urljoin(host,h) for h in p.links if re.search('/(episodio|video)/[^?]+',h)))
+    print('list',host,q,U.urlsplit(title).path,len(eps),[U.urlsplit(u).path for u in eps[:2]],flush=True)
+    p=page(eps[0])
+    for kind,u in p.media:
+        u=U.urljoin(host,u);url=U.urlsplit(u);query=U.parse_qs(url.query)
+        print('PUBLIC',q,kind,url.hostname,url.path[:60],list(query),flush=True)
+        if kind in ('video','source'):test_media(q,u);continue
+        if url.hostname!=U.urlsplit(host).hostname:continue
+        for key in ['d']:
+            direct=query.get(key,[''])[0]
+            if direct.startswith('https://'):test_media(q,direct)
+        if not query:
+            with conn(u) as resp:
+                if resp.headers.get_content_type() in ('video/mp4','video/webm'):test_media(q,u)
+                elif resp.headers.get_content_type()=='text/html':
+                    frame=Links();frame.feed(resp.read(300000).decode(errors='replace'))
+                    for t,x in frame.media:
+                        if t in ('video','source'):test_media(q,U.urljoin(u,x))
+def test_media(q,u):
+    try:media(q,u)
+    except Exception as e: print('media error',q,type(e).__name__,getattr(e,'code',None),flush=True)
 with ThreadPoolExecutor(max_workers=3) as pool:
-    for f,args in [(webseries,["https://animesdrive.cloud","https://animesdigital.org"]),(archive_channels,["Morevna","anime"])]:
-        for arg in args:pool.submit(test,f,arg)
+    for host in ["https://animesdrive.cloud","https://animesdigital.org"]:
+        for q in ['Frieren','Naruto','Kimetsu']: pool.submit(test,samples,(host,q))
