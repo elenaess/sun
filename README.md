@@ -75,3 +75,7 @@ Os catálogos podem listar obras que não têm vídeo reproduzível.
 - O Perfil inclui um diretório das sete plataformas oficiais listadas no repositório de referência, com acesso externo, não reprodução nativa.
 - Filtros adicionais excluem itens explicitamente sinalizados como adultos pelos provedores; isso não substitui classificação e moderação confiáveis na origem.
 - O repositório de referência é um diretório, não uma API de vídeo. Fontes sem autorização demonstrada, conteúdo adulto e torrent não foram incorporados. A reprodução nativa de terceiros depende de mídia autorizada compatível com o Media3.
+
+## Sun 0.6.2 — gateway próprio
+
+O [gateway](gateway/README.md) agora é um serviço HTTP implementado no próprio repositório, com catálogo de Cinema aberto e suporte opcional a catálogo autorizado do operador. Inclui Docker e testes de contrato. Requer publicação HTTPS separada para funcionar no Android.

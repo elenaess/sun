@@ -30,7 +30,7 @@ const SdkProvider = (() => {
     return {id:'sdk:'+p+':'+row.id,provider:'sdk',sdkProvider:p,type:row.catalogType==='MOVIE'?'movie':'series',
       remoteId:String(row.id),name:String(row.title),kind:row.catalogType==='MOVIE'?'Filme':'Série',
       year:row.year||'',genre:'Anime',bannerImage:validUrl(row.thumbnailUrl),
-      coverImage:{large:validUrl(row.thumbnailUrl)},description:'Fonte: '+p};
+      coverImage:{large:validUrl(row.thumbnailUrl)},creator:String(row.creator||''),license:String(row.license||''),licenseUrl:validUrl(row.licenseUrl),source:validUrl(row.source),description:String(row.description||('Fonte: '+p))};
   }
   async function searchAll(term){
     if(!term||term.trim().length<2)return [];
