@@ -68,3 +68,10 @@ provavelmente operacional e o problema está nos links ou nas fontes externas.
 Vá em **Perfil > Gateway de APIs**, informe o endpoint HTTPS compatível.
 Sem esse endpoint, o Sun segue usando Stremio, AniList, Wikimedia e Internet Archive.
 Os catálogos podem listar obras que não têm vídeo reproduzível.
+
+## 0.6.1 — busca ampliada e diretório de plataformas
+
+- A busca consulta todos os catálogos pesquisáveis distintos de cada manifesto Stremio configurado, em vez de somente o primeiro. Falhas isoladas não descartam resultados dos demais catálogos.
+- O Perfil inclui um diretório das sete plataformas oficiais listadas no repositório de referência, com acesso externo, não reprodução nativa.
+- Filtros adicionais excluem itens explicitamente sinalizados como adultos pelos provedores; isso não substitui classificação e moderação confiáveis na origem.
+- O repositório de referência é um diretório, não uma API de vídeo. Fontes sem autorização demonstrada, conteúdo adulto e torrent não foram incorporados. A reprodução nativa de terceiros depende de mídia autorizada compatível com o Media3.

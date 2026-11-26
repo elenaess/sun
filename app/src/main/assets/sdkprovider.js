@@ -26,7 +26,7 @@ const SdkProvider = (() => {
   }
   function refresh(){providersPromise=null;}
   function normalize(row,p){
-    if(!row||!row.id||!row.title||row.catalogType==='MANGA')return null;
+    if(!row||!row.id||!row.title||row.catalogType==='MANGA'||row.isAdult||row.adult||row.behaviorHints?.isAdult)return null;
     return {id:'sdk:'+p+':'+row.id,provider:'sdk',sdkProvider:p,type:row.catalogType==='MOVIE'?'movie':'series',
       remoteId:String(row.id),name:String(row.title),kind:row.catalogType==='MOVIE'?'Filme':'Série',
       year:row.year||'',genre:'Anime',bannerImage:validUrl(row.thumbnailUrl),

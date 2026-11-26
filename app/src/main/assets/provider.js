@@ -43,18 +43,24 @@ const AnimeProvider = (() => {
       'demon slayer':'Kimetsu no Yaiba','jujutsu kaisen':'Jujutsu Kaisen','my hero academia':'Boku no Hero Academia'};
     const search=aliases[term.toLocaleLowerCase()]||term;
     const response=await json('/catalog/'+type+'/'+collection+extraPath(search,skip)+'.json');
-    return (response.metas||[]).filter(m=>m.id&&m.name&&!m.behaviorHints?.isAdult).map(m=>rawToItem(m,type));
+    return (response.metas||[]).filter(m=>m.id&&m.name&&!m.behaviorHints?.isAdult&&!m.isAdult).map(m=>rawToItem(m,type));
   }
   function supportsSearch(c){return (c.extra||[]).some(x=>x.name==='search');}
   async function extraCatalog(source,key,term,skip){
     const type=key==='films'?'movie':'series';
     const candidates=(source.catalogs||[]).filter(c=>c.type===type&&c.id&&(!term||supportsSearch(c)));
     if(!candidates.length)return [];
-    const entry=candidates[0];
-    const route='/plugin/'+source.index+'/catalog/'+type+'/'+id(entry.id)+extraPath(term,skip)+'.json';
-    const response=await json(route);
-    return (response.metas||[]).filter(m=>m.id&&m.name&&!m.behaviorHints?.isAdult)
-      .map(m=>rawToItem(m,type,source.index));
+    // Search each distinct searchable catalog, rather than only the first one.
+    // Keep browsing limited to one catalog to avoid excessive background requests.
+    const entries=term?[...new Map(candidates.map(c=>[c.id,c])).values()]:candidates.slice(0,1);
+    const settled=await Promise.allSettled(entries.map(async entry=>{
+      const route='/plugin/'+source.index+'/catalog/'+type+'/'+id(entry.id)+extraPath(term,skip)+'.json';
+      const response=await json(route);
+      return (response.metas||[]).filter(m=>m.id&&m.name&&!m.behaviorHints?.isAdult&&!m.isAdult)
+        .map(m=>rawToItem(m,type,source.index));
+    }));
+    if(settled.every(r=>r.status==='rejected'))throw new Error('Catálogos indisponíveis');
+    return [...new Map(settled.flatMap(r=>r.status==='fulfilled'?r.value:[]).map(m=>[m.id,m])).values()];
   }
   async function catalog(key,query='',skip=0){
     if(!catalogs[key])return [];
@@ -75,6 +81,7 @@ const AnimeProvider = (() => {
     const response=await json(route);
     if(!response.meta)throw new Error('Ficha não disponível');
     const meta=response.meta,unique=new Set(),eps=[];
+    if(meta.isAdult||meta.behaviorHints?.isAdult)throw new Error('Conteúdo indisponível');
     for(const v of meta.videos||[]){
       if(!v.id||unique.has(v.id))continue;unique.add(v.id);
       const season=Number(v.season??1),number=Number(v.episode??v.number??(eps.length+1));

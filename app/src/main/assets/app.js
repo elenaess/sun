@@ -130,7 +130,7 @@ function toolsPage(){
     <button class="row" data-action="link">${icon('plus')} Abrir link de vídeo</button>${editing?sourceForm(false):''}`;
 }
 function profile(){
-  return `<h1>Perfil</h1><div class="identity"><img src="./cinema/morevna.jpg" alt=""><div><strong>Meu perfil</strong><small>Sun 0.6.0</small></div></div>
+  return `<h1>Perfil</h1><div class="identity"><img src="./cinema/morevna.jpg" alt=""><div><strong>Meu perfil</strong><small>Sun 0.6.1</small></div></div>
     <button class="row" data-action="theme">${icon('moon')} Tema ${prefs.theme==='light'?'claro':'escuro'}</button>
     <button class="row" data-action="export">${icon('download')} Exportar biblioteca</button>
     <button class="row" data-action="import">${icon('upload')} Importar biblioteca</button>
@@ -146,6 +146,9 @@ function profile(){
     <h2>Plugins de vídeo</h2><p class="desc">Até 18 manifestos Stremio compatíveis; sem conta no Sun. A disponibilidade e os direitos dependem de cada fonte.</p>
     ${(prefs.plugins||[]).map((url,i)=>`<div class="row plugin-row"><div><strong>Fonte ${i+1}</strong><small>${esc(url)}</small></div><button class="plugin-remove" data-action="remove-plugin" data-index="${i}" aria-label="Remover fonte ${i+1}">Remover</button></div>`).join('')}
     <form id="plugin-form"><label>Manifesto Stremio HTTPS<input required id="plugin-manifest" type="url" placeholder="https://provedor.exemplo/manifest.json"></label><button class="cta">Adicionar plugin</button></form>
+    <h2>Plataformas oficiais de anime</h2>
+    <p class="desc">Diretório de serviços externos, não fontes de mídia direta. Disponibilidade e assinatura variam; o player nativo permanece disponível para mídias autorizadas compatíveis.</p>
+    ${[['Pluto TV (gratuito)','https://pluto.tv'],['Crunchyroll','https://www.crunchyroll.com'],['Netflix','https://www.netflix.com/br'],['Prime Video','https://www.primevideo.com'],['Disney+','https://www.disneyplus.com'],['Anime Onegai','https://www.animeonegai.com'],['HBO Max','https://www.hbomax.com/br']].map(([title,url])=>`<a class="row" href="${esc(url)}">${esc(title)} ${icon('external',16)}</a>`).join('')}
     <h2>Extras oficiais</h2>${OFFICIAL_EPISODES.map(v=>`<a class="row" href="https://www.youtube.com/watch?v=${v.id}">${esc(v.title)} ${icon('external',16)}</a>`).join('')}`;
 }
 const screens={home,search,browse,library,videos:toolsPage,profile};
